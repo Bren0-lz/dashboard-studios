@@ -1,0 +1,20 @@
+{
+  "name": "@dash/bff",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=../../.env src/server.ts",
+    "mock-crm": "tsx src/mock-crm/server.ts",
+    "build": "esbuild src/server.ts --bundle --platform=node --format=esm --target=node22 --external:fastify --external:@fastify/cookie --external:@fastify/static --external:zod --outfile=dist/server.js",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run src"
+  },
+  "dependencies": {
+    "@dash/shared": "*",
+    "@fastify/cookie": "^11.1.5",
+    "@fastify/static": "^10.1.8",
+    "fastify": "^5.12.7",
+    "zod": "^4.6.7"
+  }
+}
