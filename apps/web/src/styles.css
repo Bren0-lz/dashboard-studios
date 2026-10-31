@@ -1015,15 +1015,21 @@ button:disabled {
   gap: 2px;
   width: 100%;
   padding: var(--space-1) var(--space-2);
-  border: 0;
-  border-left: 4px solid var(--studio);
+  border: 1px solid transparent;
   border-radius: calc(var(--radius-sm) - 2px);
   text-align: left;
   cursor: pointer;
   font-size: var(--text-xs);
 }
-.cal-block.line-aesthetics {
-  border-left-color: var(--aesthetics);
+/* Linha de negócio do bloco: sigla em texto (sem borda colorida). */
+.cal-block-line {
+  font-weight: 600;
+}
+.cal-block.line-studio .cal-block-line {
+  color: var(--studio);
+}
+.cal-block.line-aesthetics .cal-block-line {
+  color: var(--aesthetics);
 }
 .cal-block.tone-green {
   background: var(--ok-bg);
@@ -1046,7 +1052,8 @@ button:disabled {
 }
 .cal-block-meta {
   display: flex;
-  gap: var(--space-2);
+  flex-wrap: wrap;
+  gap: 2px var(--space-2);
 }
 .day-list {
   display: none;
@@ -1161,9 +1168,6 @@ button:disabled {
 }
 .lead-card strong {
   font-size: var(--text-md);
-}
-.lead-card.stale {
-  border-left: 4px solid var(--late-orange);
 }
 .lead-actions {
   display: flex;

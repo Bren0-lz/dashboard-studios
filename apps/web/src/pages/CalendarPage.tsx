@@ -57,7 +57,7 @@ export function CalendarPage() {
     <>
       <PageHeader
         title="Quais horários estão vazios?"
-        subtitle="Verde = cheia · amarelo = parcial · vermelho = vazia. Borda azul = Studio, rosa = Estética."
+        subtitle="Verde = cheia · amarelo = parcial · vermelho = vazia."
         actions={
           <div className="segmented" role="group" aria-label="Visão do calendário">
             {(
@@ -104,6 +104,7 @@ function BlockCard({ block, onOpen, compact = false }: { block: Block; onOpen: (
     >
       <span className="cal-block-name">{group.name}</span>
       <span className="cal-block-meta">
+        <span className="cal-block-line">{group.businessLine === "studio" ? "Studio" : "Estética"}</span>
         {compact ? null : <span>{block.startTime}</span>}
         <span>
           {group.enrolled}/{group.capacity}

@@ -91,7 +91,7 @@ export function LeadsPage() {
                     </header>
                     {column.leads.length === 0 ? <p className="muted kanban-empty">Nenhum lead nesta etapa.</p> : null}
                     {column.leads.map((lead) => (
-                      <article key={lead.id} className={`lead-card${lead.idleDays >= data.staleDays ? " stale" : ""}`}>
+                      <article key={lead.id} className="lead-card">
                         <strong>{lead.fullName}</strong>
                         <span className="muted">
                           {lead.interest} · {lead.source}
