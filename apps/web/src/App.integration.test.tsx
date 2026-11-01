@@ -83,6 +83,32 @@ describe("turmas", () => {
     expect(await within(drawer).findByText(/saiu da espera e entrou na vaga/)).toBeInTheDocument();
   });
 
+  it("mostra a tabela no formato do CRM, com matriculados, totais e filtros", async () => {
+    await startServer();
+    const user = userEvent.setup();
+    renderAt("/turmas");
+    await login(user);
+    const table = await screen.findByRole("table", { name: "Turmas" });
+    for (const header of ["Turma", "Horários", "Matriculados", "Vagas disponíveis", "Faturamento atual", "Potencial (turma cheia)"]) {
+      expect(within(table).getByRole("columnheader", { name: header })).toBeInTheDocument();
+    }
+    const row = within(table).getByRole("button", { name: "Pilates Ter/Qui 18h" }).closest("tr")!;
+    expect(row).toHaveTextContent("Terça · 18:00–19:00, Quinta · 18:00–19:00");
+    const toggle = within(row).getByRole("button", { name: /^Ver matriculados de Pilates Ter\/Qui 18h: \d+ de 8$/ });
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    const members = await screen.findByRole("list", { name: "Matriculados de Pilates Ter/Qui 18h" });
+    expect(within(members).getAllByRole("listitem")[0]).toHaveTextContent(/Desde \d{2} de .+ · (R\$|Sem plano ativo)/);
+
+    const totalRow = () => within(table).getByRole("rowheader", { name: "Total" }).closest("tr")!;
+    const before = totalRow().textContent;
+    await user.selectOptions(screen.getByRole("combobox", { name: "Dia da semana" }), "6");
+    expect(within(table).queryByRole("button", { name: "Pilates Ter/Qui 18h" })).not.toBeInTheDocument();
+    expect(within(table).getByRole("button", { name: "Pilates Sáb 9h" })).toBeInTheDocument();
+    expect(totalRow().textContent).not.toBe(before);
+    expect(screen.getByText(/Valores por mês\. O faturamento atual soma/)).toBeInTheDocument();
+  });
+
   it("esconde ações sem permissão", async () => {
     await startServer();
     const user = userEvent.setup();

@@ -3,6 +3,11 @@ const monthNames = ["jan.", "fev.", "mar.", "abr.", "mai.", "jun.", "jul.", "ago
 export const weekdayShort = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 export const weekdayLong = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 
+/** "Terça · 18:00–19:00", como na tabela de turmas do CRM. */
+export function slotLabel(slot: { weekday: number; startTime: string; endTime: string }): string {
+  return `${weekdayLong[slot.weekday] ?? ""} · ${slot.startTime}–${slot.endTime}`;
+}
+
 export function formatMoney(cents: number): string {
   return money.format(cents / 100).replace(/\u00a0/g, " ");
 }

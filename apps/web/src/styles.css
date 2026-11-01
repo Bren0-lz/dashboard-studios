@@ -654,11 +654,90 @@ button:disabled {
 .cell-actions > * + * {
   margin-left: var(--space-2);
 }
-.groups-table td[data-label="Turma"] {
+/* Tabela de turmas no formato da visão geral do CRM. */
+.groups-table tbody th,
+.groups-table tfoot th {
+  padding: var(--space-3);
+  padding-left: calc(var(--space-5) - 1px);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  font-size: var(--text-md);
+  text-transform: none;
+  white-space: normal;
   min-width: 150px;
 }
-.groups-table td[data-label="Horários"] {
-  min-width: 110px;
+.groups-table tbody th .row-title {
+  display: block;
+}
+.groups-table thead th,
+.groups-table thead th.num {
+  white-space: normal;
+}
+.groups-table th:first-child,
+.groups-table td:first-child {
+  border-right: 1px solid var(--line);
+}
+.groups-table .groups-table-schedule {
+  min-width: 180px;
+}
+.groups-table tfoot th,
+.groups-table tfoot td {
+  border-top: 1px solid var(--line);
+  border-bottom: 0;
+  font-weight: 600;
+}
+.members-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--green-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.members-toggle svg {
+  transition: transform 0.15s;
+}
+.members-toggle[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+.groups-table .members-row td {
+  padding: var(--space-3) var(--space-4);
+  border-right: 0;
+  background: var(--cream);
+}
+.members-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.members-list li {
+  display: grid;
+  gap: 2px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+}
+.members-list small {
+  font-size: var(--text-xs);
+}
+.members-empty {
+  margin: 0;
+}
+.groups-table-note {
+  margin: 0;
+  padding: var(--space-4) calc(var(--space-5) - 1px);
+  border-top: 1px solid var(--line);
+  font-size: var(--text-xs);
+  line-height: 1.55;
 }
 .row-title {
   padding: 0;
@@ -1294,6 +1373,33 @@ button:disabled {
     justify-content: flex-end;
     flex-wrap: wrap;
     padding-top: var(--space-2);
+  }
+  .groups-table tfoot {
+    display: block;
+    width: 100%;
+  }
+  .groups-table tbody th:first-child,
+  .groups-table tfoot th:first-child {
+    display: block;
+    width: 100%;
+    padding: 0 0 var(--space-1);
+    border: 0;
+  }
+  .groups-table tfoot td {
+    border: 0;
+  }
+  .groups-table th:first-child,
+  .groups-table td:first-child {
+    border-right: 0;
+  }
+  .groups-table .members-row td {
+    display: block;
+    padding: var(--space-2) 0 0;
+    background: none;
+  }
+  .groups-table .members-row td::before,
+  .groups-table tfoot td[data-label="Horários"] {
+    display: none;
   }
   .data-table td[data-label="Turma"],
   .data-table td[data-label="Pessoa"],

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ExternalGroupRow, WaitlistEntry } from "./crm-types.js";
+import { slotLabel } from "./format.js";
 import {
   buildOpportunities,
   compatibleGroups,
@@ -247,5 +248,11 @@ describe("WhatsApp e formatação", () => {
   it("formata dinheiro e data", () => {
     expect(formatMoney(123456)).toBe("R$ 1.234,56");
     expect(shortDate("2026-10-01")).toBe("01 de out.");
+  });
+});
+
+describe("slotLabel", () => {
+  it("escreve o horário como na tabela do CRM", () => {
+    expect(slotLabel({ weekday: 2, startTime: "18:00", endTime: "19:00" })).toBe("Terça · 18:00–19:00");
   });
 });
