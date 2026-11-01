@@ -157,7 +157,14 @@ function periodForLine(summary: SalesReportPeriod, sales: readonly SaleMovement[
   const own = sales.filter((sale) => matchesLine(sale, line));
   const gross = own.filter((sale) => sale.kind === "sale").reduce((sum, sale) => sum + sale.amountInCents, 0);
   const cancelled = own.filter((sale) => sale.kind === "cancellation").reduce((sum, sale) => sum + Math.abs(sale.amountInCents), 0);
-  return { ...summary, grossSalesInCents: gross, cancelledSalesInCents: cancelled, netSalesInCents: gross - cancelled, receivedInCents: 0, attendedPatients: 0 };
+  return {
+    ...summary,
+    grossSalesInCents: gross,
+    cancelledSalesInCents: cancelled,
+    netSalesInCents: gross - cancelled,
+    buyers: new Set(own.filter((sale) => sale.kind === "sale").map((sale) => sale.patientId)).size,
+    payment: { paidInCents: 0, openInCents: 0, overdueInCents: 0 },
+  };
 }
 
 function ranking(sales: readonly SaleMovement[], key: (sale: SaleMovement) => string | undefined): SalesRankingItem[] {

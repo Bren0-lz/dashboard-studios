@@ -81,13 +81,13 @@ export function SalesPage() {
             />
             <Kpi label="Bruto" value={formatMoney(data.summary.grossSalesInCents)} detail={`${data.summary.salesCount} vendas`} />
             <Kpi label="Cancelado" value={formatMoney(data.summary.cancelledSalesInCents)} tone={data.summary.cancelledSalesInCents ? "bad" : undefined} />
-            {!data.partialLine ? <Kpi label="Recebido" value={formatMoney(data.summary.receivedInCents)} detail={`${data.summary.attendedPatients} clientes atendidos`} /> : null}
+            {!data.partialLine ? <Kpi label="Recebido" value={formatMoney(data.summary.payment.paidInCents)} detail={`${data.summary.buyers} ${data.summary.buyers === 1 ? "cliente comprou" : "clientes compraram"}`} /> : null}
             <Kpi label="Ticket médio" value={formatMoney(data.summary.averageTicketInCents)} />
             {line === "all" ? (
               <Kpi label="Studio × Estética" value={`${formatMoney(data.byLine.studio)}`} detail={`${businessLineLabels.aesthetics}: ${formatMoney(data.byLine.aesthetics)}`} />
             ) : null}
           </section>
-          {data.partialLine ? <Notice>Recebido e clientes atendidos não se separam por linha; veja em “Tudo”.</Notice> : null}
+          {data.partialLine ? <Notice>O recebido não se separa por linha; veja em “Tudo”.</Notice> : null}
           <section className="panel">
             <div className="panel-head">
               <div>
