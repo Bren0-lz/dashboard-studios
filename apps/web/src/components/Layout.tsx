@@ -1,4 +1,4 @@
-import { CalendarDays, CircleDollarSign, Clock3, Filter, LayoutDashboard, LogOut, Receipt, RefreshCw, Users } from "lucide-react";
+import { CalendarDays, Clock3, LayoutDashboard, LogOut, Receipt, RefreshCw, Users } from "lucide-react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { businessLineLabels, type LineFilter } from "@dash/shared";
 import { useLineFilter } from "../lib/filters";
@@ -10,8 +10,6 @@ const nav = [
   { to: "/calendario", label: "Calendário", icon: CalendarDays },
   { to: "/espera", label: "Lista de espera", icon: Clock3 },
   { to: "/inadimplencia", label: "Inadimplência", icon: Receipt },
-  { to: "/funil", label: "Funil de leads", icon: Filter },
-  { to: "/vendas", label: "Vendas", icon: CircleDollarSign },
 ];
 
 const lineOptions: { value: LineFilter; label: string }[] = [
