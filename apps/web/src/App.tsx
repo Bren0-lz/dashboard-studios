@@ -7,11 +7,9 @@ import { api, setCsrfToken, setUnauthorizedHandler } from "./lib/api";
 import { SessionContext } from "./lib/session";
 import { CalendarPage } from "./pages/CalendarPage";
 import { GroupsPage } from "./pages/GroupsPage";
-import { LeadsPage } from "./pages/LeadsPage";
 import { LoginPage } from "./pages/LoginPage";
 import { OverduePage } from "./pages/OverduePage";
 import { OverviewPage } from "./pages/OverviewPage";
-import { SalesPage } from "./pages/SalesPage";
 import { WaitlistPage } from "./pages/WaitlistPage";
 
 export function AppRoutes() {
@@ -47,8 +45,6 @@ export function AppRoutes() {
           <Route path="calendario" element={<CalendarPage />} />
           <Route path="espera" element={<WaitlistPage />} />
           <Route path="inadimplencia" element={<OverduePage />} />
-          <Route path="funil" element={<LeadsPage />} />
-          <Route path="vendas" element={<SalesPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

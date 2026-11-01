@@ -51,7 +51,6 @@ export function OverviewPage() {
                   : `${data.sales.changePercent >= 0 ? "+" : ""}${formatPercent(data.sales.changePercent)} sobre o mês anterior`
               }
               tone={data.sales.changePercent !== null && data.sales.changePercent < 0 ? "bad" : undefined}
-              onClick={() => go("/vendas")}
             >
               {data.goal ? (
                 <div className="goal">
@@ -96,7 +95,6 @@ export function OverviewPage() {
                 label="Leads abertos"
                 value={String(data.leads.open)}
                 detail={`Conversão de ${formatPercent(data.leads.conversionRate)} · ${data.leads.withoutContact} sem contato`}
-                onClick={() => go("/funil")}
               />
             ) : null}
           </section>

@@ -120,7 +120,7 @@ describe("turmas", () => {
   });
 });
 
-describe("espera, inadimplência, calendário, funil e vendas", () => {
+describe("espera, inadimplência e calendário", () => {
   it("destaca vaga compatível na lista de espera", async () => {
     await startServer();
     const user = userEvent.setup();
@@ -154,26 +154,6 @@ describe("espera, inadimplência, calendário, funil e vendas", () => {
     await user.click(screen.getByRole("button", { name: "Lista" }));
     await user.click(screen.getByRole("button", { name: "Mapa de calor" }));
     expect(await screen.findByText(/Ocupação média por dia e horário/)).toBeInTheDocument();
-  });
-
-  it("move um lead de etapa no funil", async () => {
-    await startServer();
-    const user = userEvent.setup();
-    renderAt("/funil");
-    await login(user);
-    await screen.findByRole("heading", { name: "Novos" });
-    const move = screen.getAllByRole("button", { name: /para Em contato$/ })[0]!;
-    await user.click(move);
-    expect(await screen.findByText(/foi para Em contato/)).toBeInTheDocument();
-  });
-
-  it("mostra vendas do período com link de exportação", async () => {
-    await startServer();
-    const user = userEvent.setup();
-    renderAt("/vendas");
-    await login(user);
-    expect(await screen.findByText("Ticket médio")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Exportar CSV/ })).toHaveAttribute("href", expect.stringContaining("/api/sales.csv?from="));
   });
 });
 
