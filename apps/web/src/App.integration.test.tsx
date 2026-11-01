@@ -140,12 +140,18 @@ describe("espera, inadimplência, calendário, funil e vendas", () => {
     expect(decodeURIComponent(charge.getAttribute("href")!)).toContain("chave Pix é pix@aryana.com");
   });
 
-  it("mostra a grade semanal e o mapa de calor", async () => {
+  it("mostra o calendário no formato da agenda do CRM e o mapa de calor", async () => {
     await startServer();
     const user = userEvent.setup();
     renderAt("/calendario");
     await login(user);
-    expect(await screen.findByRole("grid", { name: "Grade semanal" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Agenda da semana" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Semana" })).toHaveClass("active");
+    await user.click(screen.getByRole("button", { name: "Mês" }));
+    expect(await screen.findByText("Seg", { selector: ".month-weekdays span" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Dia" }));
+    expect(await screen.findByRole("table", { name: "Agenda do dia por profissional" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Lista" }));
     await user.click(screen.getByRole("button", { name: "Mapa de calor" }));
     expect(await screen.findByText(/Ocupação média por dia e horário/)).toBeInTheDocument();
   });
