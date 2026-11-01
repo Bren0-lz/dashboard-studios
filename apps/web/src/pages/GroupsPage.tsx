@@ -1,15 +1,18 @@
-import { AlertCircle, Clock3, UserPlus } from "lucide-react";
+import { AlertCircle, ChevronDown, UserPlus } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
   dayPeriodLabels,
   dayPeriodOf,
   formatMoney,
+  shortDate,
+  slotLabel,
   weekdayLong,
   type DayPeriod,
+  type GroupDetailsResponse,
   type GroupRow,
   type GroupsResponse,
 } from "@dash/shared";
-import { EmptyState, ErrorBanner, Kpi, LinePill, Notice, OccupancyBar, PageHeader, Skeleton } from "../components/ui";
+import { EmptyState, ErrorBanner, Kpi, Notice, PageHeader, Skeleton } from "../components/ui";
 import { useLineFilter, withLine } from "../lib/filters";
 import { useGroupFlow } from "../lib/useGroupFlow";
 import { useRemote } from "../lib/useRemote";
@@ -48,6 +51,12 @@ export function GroupsPage() {
   );
   const filtered = JSON.stringify(filters) !== JSON.stringify(emptyFilters);
   const showOverdue = Boolean(data?.features.overdue && session.can.seeFinance);
+  const canEnroll = session.can.enroll || session.can.sellPlan;
+  const columns = 6 + (showOverdue ? 1 : 0) + (canEnroll ? 1 : 0);
+  const total = (pick: (group: GroupRow) => number) => rows.reduce((sum, group) => sum + pick(group), 0);
+  // Turmas com a lista de matriculados aberta logo abaixo da linha.
+  const [expanded, setExpanded] = useState<string[]>([]);
+  const toggleMembers = (groupId: string) => setExpanded((current) => (current.includes(groupId) ? current.filter((item) => item !== groupId) : [...current, groupId]));
 
   return (
     <>
@@ -110,30 +119,79 @@ export function GroupsPage() {
               />
             ) : (
               <div className="table-wrap">
-                <table className="data-table groups-table">
+                <table className="data-table groups-table" aria-label="Turmas">
                   <thead>
                     <tr>
-                      <th>Turma</th>
-                      <th>Linha</th>
-                      <th>Horários</th>
-                      <th>Profissional</th>
-                      <th>Ocupação</th>
-                      <th className="num">Vagas</th>
-                      <th className="num">Espera</th>
-                      {showOverdue ? <th className="num">Inadimplentes</th> : null}
-                      <th className="num">Atual / potencial</th>
-                      <th className="num">Parada</th>
-                      <th aria-label="Ações" />
+                      <th scope="col">Turma</th>
+                      <th scope="col">Horários</th>
+                      <th scope="col" className="num">
+                        Matriculados
+                      </th>
+                      <th scope="col" className="num">
+                        Vagas disponíveis
+                      </th>
+                      {showOverdue ? (
+                        <th scope="col" className="num">
+                          Inadimplentes
+                        </th>
+                      ) : null}
+                      <th scope="col" className="num">
+                        Faturamento atual
+                      </th>
+                      <th scope="col" className="num">
+                        Potencial (turma cheia)
+                      </th>
+                      {canEnroll ? <th scope="col" aria-label="Ações" /> : null}
                     </tr>
                   </thead>
                   <tbody>
                     {rows.map((group) => (
-                      <GroupTableRow key={group.id} group={group} showOverdue={showOverdue} canEnroll={session.can.enroll || session.can.sellPlan} onOpen={() => flow.open(group.id)} onEnroll={() => flow.enroll(group)} />
+                      <GroupTableRow
+                        key={group.id}
+                        group={group}
+                        showOverdue={showOverdue}
+                        canEnroll={canEnroll}
+                        columns={columns}
+                        open={expanded.includes(group.id)}
+                        onToggle={() => toggleMembers(group.id)}
+                        onOpen={() => flow.open(group.id)}
+                        onEnroll={() => flow.enroll(group)}
+                      />
                     ))}
                   </tbody>
+                  <tfoot>
+                    <tr>
+                      <th scope="row">Total</th>
+                      <td data-label="Horários" />
+                      <td data-label="Matriculados" className="num">
+                        {total((group) => group.enrolled)} de {total((group) => group.capacity)}
+                      </td>
+                      <td data-label="Vagas disponíveis" className="num">
+                        {total((group) => group.freeSeats)}
+                      </td>
+                      {showOverdue ? (
+                        <td data-label="Inadimplentes" className="num">
+                          {total((group) => group.overdueMembers)}
+                        </td>
+                      ) : null}
+                      <td data-label="Faturamento atual" className="num">
+                        {formatMoney(total((group) => group.monthlyRevenueInCents))}
+                      </td>
+                      <td data-label="Potencial (turma cheia)" className="num">
+                        {formatMoney(total((group) => group.potentialMonthlyRevenueInCents))}
+                      </td>
+                      {canEnroll ? <td className="cell-actions" /> : null}
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             )}
+            {rows.length > 0 ? (
+              <p className="groups-table-note muted">
+                Valores por mês. O faturamento atual soma, para cada matriculado, o valor por sessão do plano ativo que cobre o serviço da turma multiplicado pelos encontros do mês
+                (horários semanais × 4). O potencial acrescenta as vagas disponíveis pelo valor médio dos matriculados com plano (sem nenhum, pelo preço avulso do serviço).
+              </p>
+            ) : null}
           </section>
           {!data.features.overdue && session.can.seeFinance ? (
             <Notice tone="warning">O CRM ainda não informa a inadimplência por turma; a coluna aparece depois da atualização do CRM.</Notice>
@@ -144,60 +202,107 @@ export function GroupsPage() {
   );
 }
 
-function GroupTableRow({ group, showOverdue, canEnroll, onOpen, onEnroll }: { group: GroupRow; showOverdue: boolean; canEnroll: boolean; onOpen: () => void; onEnroll: () => void }) {
+function GroupTableRow({
+  group,
+  showOverdue,
+  canEnroll,
+  columns,
+  open,
+  onToggle,
+  onOpen,
+  onEnroll,
+}: {
+  group: GroupRow;
+  showOverdue: boolean;
+  canEnroll: boolean;
+  columns: number;
+  open: boolean;
+  onToggle: () => void;
+  onOpen: () => void;
+  onEnroll: () => void;
+}) {
+  const membersId = `turma-${group.id}-matriculados`;
   return (
-    <tr className="clickable" onClick={onOpen}>
-      <td data-label="Turma">
-        <button type="button" className="row-title" onClick={onOpen}>
-          {group.name}
-        </button>
-        <span className="muted cell-sub">{group.serviceName}</span>
-      </td>
-      <td data-label="Linha">
-        <LinePill line={group.businessLine} />
-      </td>
-      <td data-label="Horários">{group.schedule}</td>
-      <td data-label="Profissional">{group.professionalName}</td>
-      <td data-label="Ocupação">
-        <OccupancyBar enrolled={group.enrolled} capacity={group.capacity} percent={group.occupancyPercent} />
-      </td>
-      <td data-label="Vagas" className="num">
-        <strong className={group.freeSeats > 0 ? "text-good" : "muted"}>{group.freeSeats}</strong>
-      </td>
-      <td data-label="Espera" className="num">
-        {group.waitlistCount > 0 ? (
-          <span className="icon-count" title="Pessoas na espera da turma">
-            <Clock3 size={14} aria-hidden /> {group.waitlistCount}
-          </span>
-        ) : (
-          <span className="muted">0</span>
-        )}
-      </td>
-      {showOverdue ? (
-        <td data-label="Inadimplentes" className="num">
-          {group.overdueMembers > 0 ? (
-            <span className="icon-count text-bad" title={`${group.overdueMembers} em atraso`}>
-              <AlertCircle size={14} aria-hidden /> {group.overdueMembers} · {formatMoney(group.overdueInCents)}
-            </span>
-          ) : (
-            <span className="muted">—</span>
-          )}
-        </td>
-      ) : null}
-      <td data-label="Atual / potencial" className="num">
-        {formatMoney(group.monthlyRevenueInCents)}
-        <span className="muted cell-sub">de {formatMoney(group.potentialMonthlyRevenueInCents)}</span>
-      </td>
-      <td data-label="Parada" className="num">
-        <strong className={group.idleRevenueInCents > 0 ? "text-warn" : "muted"}>{formatMoney(group.idleRevenueInCents)}</strong>
-      </td>
-      <td className="cell-actions" onClick={(event) => event.stopPropagation()}>
-        {canEnroll ? (
-          <button type="button" className={group.freeSeats > 0 ? "primary-button small" : "secondary-button small"} onClick={onEnroll}>
-            <UserPlus size={16} aria-hidden /> {group.freeSeats > 0 ? "Inscrever" : "Espera"}
+    <>
+      <tr>
+        <th scope="row" data-label="Turma">
+          <button type="button" className="row-title" onClick={onOpen}>
+            {group.name}
           </button>
+          <span className="muted cell-sub">{group.professionalName}</span>
+        </th>
+        <td data-label="Horários" className="groups-table-schedule">
+          {group.weeklySlots.length ? group.weeklySlots.map(slotLabel).join(", ") : "Horários ainda não definidos"}
+        </td>
+        <td data-label="Matriculados" className="num">
+          <button
+            type="button"
+            className="members-toggle"
+            aria-expanded={open}
+            aria-controls={membersId}
+            aria-label={`${open ? "Ocultar" : "Ver"} matriculados de ${group.name}: ${group.enrolled} de ${group.capacity}`}
+            onClick={onToggle}
+          >
+            {group.enrolled} de {group.capacity}
+            <ChevronDown size={16} aria-hidden />
+          </button>
+        </td>
+        <td data-label="Vagas disponíveis" className="num">
+          {group.freeSeats}
+        </td>
+        {showOverdue ? (
+          <td data-label="Inadimplentes" className="num">
+            {group.overdueMembers > 0 ? (
+              <span className="icon-count text-bad" title={`${group.overdueMembers} em atraso`}>
+                <AlertCircle size={14} aria-hidden /> {group.overdueMembers} · {formatMoney(group.overdueInCents)}
+              </span>
+            ) : (
+              <span className="muted">—</span>
+            )}
+          </td>
         ) : null}
-      </td>
-    </tr>
+        <td data-label="Faturamento atual" className="num">
+          {formatMoney(group.monthlyRevenueInCents)}
+        </td>
+        <td data-label="Potencial (turma cheia)" className="num">
+          {formatMoney(group.potentialMonthlyRevenueInCents)}
+        </td>
+        {canEnroll ? (
+          <td className="cell-actions">
+            <button type="button" className={group.freeSeats > 0 ? "primary-button small" : "secondary-button small"} onClick={onEnroll}>
+              <UserPlus size={16} aria-hidden /> {group.freeSeats > 0 ? "Inscrever" : "Espera"}
+            </button>
+          </td>
+        ) : null}
+      </tr>
+      {open ? (
+        <tr id={membersId} className="members-row">
+          <td colSpan={columns}>
+            <GroupMembers group={group} />
+          </td>
+        </tr>
+      ) : null}
+    </>
+  );
+}
+
+/** Matriculados da turma, carregados só quando a linha é aberta. */
+function GroupMembers({ group }: { group: GroupRow }) {
+  const details = useRemote<GroupDetailsResponse>(`/groups/${group.id}`);
+  if (details.error && !details.data) return <ErrorBanner message={details.error} onRetry={details.reload} />;
+  if (!details.data) return <Skeleton rows={1} />;
+  const members = details.data.members.filter((member) => member.status === "active");
+  if (members.length === 0) return <p className="muted members-empty">Nenhum cliente matriculado.</p>;
+  return (
+    <ul className="members-list" aria-label={`Matriculados de ${group.name}`}>
+      {members.map((member) => (
+        <li key={member.enrollmentId}>
+          <strong>{member.patientName}</strong>
+          <small className="muted">
+            Desde {shortDate(member.startsOn)} · {member.monthlyInCents === null ? "Sem plano ativo" : `${formatMoney(member.monthlyInCents)}/mês`}
+          </small>
+        </li>
+      ))}
+    </ul>
   );
 }
