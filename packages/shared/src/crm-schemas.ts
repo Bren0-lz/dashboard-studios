@@ -107,8 +107,8 @@ const salesPeriodSchema = z.looseObject({
   grossSalesInCents: z.number(),
   cancelledSalesInCents: z.number(),
   netSalesInCents: z.number(),
-  receivedInCents: z.number(),
-  attendedPatients: z.number(),
+  buyers: z.number(),
+  payment: z.looseObject({ paidInCents: z.number(), openInCents: z.number(), overdueInCents: z.number() }),
 });
 
 export const saleMovementSchema = z.looseObject({

@@ -190,8 +190,10 @@ export interface SalesReportPeriod {
   grossSalesInCents: number;
   cancelledSalesInCents: number;
   netSalesInCents: number;
-  receivedInCents: number;
-  attendedPatients: number;
+  /** Clientes que compraram no período. */
+  buyers: number;
+  /** Contas a receber das vendas do período (sem as canceladas). */
+  payment: { paidInCents: number; openInCents: number; overdueInCents: number };
   customerDiscountInCents?: number;
 }
 

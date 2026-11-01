@@ -167,8 +167,9 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
     const gross = sales.filter((sale) => sale.kind === "sale").reduce((sum, sale) => sum + sale.amountInCents, 0);
     const cancelled = sales.filter((sale) => sale.kind === "cancellation").reduce((sum, sale) => sum + sale.amountInCents, 0);
     const received = state.receivables.filter((item) => item.paidAt && item.paidAt >= from && item.paidAt <= to).reduce((sum, item) => sum + item.amountInCents, 0);
+    const buyers = new Set(sales.filter((sale) => sale.kind === "sale").map((sale) => sale.patientId)).size;
     return {
-      summary: { from, to, grossSalesInCents: gross, cancelledSalesInCents: cancelled, netSalesInCents: gross - cancelled, receivedInCents: received, attendedPatients: new Set(sales.map((sale) => sale.patientId)).size },
+      summary: { from, to, grossSalesInCents: gross, cancelledSalesInCents: cancelled, netSalesInCents: gross - cancelled, buyers, payment: { paidInCents: received, openInCents: 0, overdueInCents: 0 } },
       sales: sales.map(saleMovement),
     };
   }
