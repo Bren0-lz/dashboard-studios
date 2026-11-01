@@ -9,6 +9,7 @@ import {
   parseLineFilter,
   planValidUntil,
   todayInClinic,
+  type BranchesResponse,
   type CancelEnrollmentResult,
   type EnrollResult,
   type GroupDetailsResponse,
@@ -154,7 +155,8 @@ export async function buildApp(config: Config, deps: AppDeps = {}): Promise<Fast
   const gatewayOf = (request: FastifyRequest) => {
     const session = request.session!;
     const branch = request.headers["x-branch-id"];
-    return new CrmGateway(client, cache, session.crmToken, session.user.id, typeof branch === "string" ? branch : undefined);
+    const branchId = typeof branch === "string" && branch.trim() ? branch.trim() : undefined;
+    return new CrmGateway(client, cache, session.crmToken, session.user.id, branchId);
   };
   const ctxOf = (request: FastifyRequest): ScreenContext => ({
     gateway: gatewayOf(request),
@@ -196,6 +198,17 @@ export async function buildApp(config: Config, deps: AppDeps = {}): Promise<Fast
   });
 
   app.get("/api/session", async (request) => sessionInfo(request.session!));
+
+  app.get("/api/branches", async (request): Promise<BranchesResponse> => {
+    const branches = await gatewayOf(request).branches();
+    return {
+      available: branches !== null,
+      branches: (branches ?? [])
+        .filter((branch) => branch.active)
+        .map(({ id, name, isDefault }) => ({ id, name, isDefault }))
+        .sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.name.localeCompare(b.name, "pt-BR")),
+    };
+  });
 
   app.get("/api/overview", async (request) => overviewScreen(ctxOf(request), lineOfQuery(request), await goals.read()));
 

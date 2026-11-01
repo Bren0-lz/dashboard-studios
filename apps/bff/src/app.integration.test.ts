@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { GroupDetailsResponse, GroupsResponse, LeadsResponse, OverdueResponse, OverviewResponse, SalesResponse, SessionInfo, WaitlistResponse } from "@dash/shared";
+import type { BranchesResponse, GroupDetailsResponse, GroupsResponse, LeadsResponse, OverdueResponse, OverviewResponse, SalesResponse, SessionInfo, WaitlistResponse } from "@dash/shared";
 import { createHarness, API_KEY } from "./test-support/harness.js";
 
 describe("sessão e segurança", () => {
@@ -200,6 +200,51 @@ describe("visão geral, vendas e leads", () => {
     expect(converted.json()).toMatchObject({ lead: { stage: "won" } });
     const after = (await session.get("/api/leads")).json() as LeadsResponse;
     expect(after.columns.find((column) => column.stage === "won")!.leads.some((item) => item.id === lead.id)).toBe(true);
+  });
+});
+
+describe("filiais", () => {
+  const CENTRO = "00000000-0000-4000-8000-510000000001";
+  const BARRA = "00000000-0000-4000-8000-510000000002";
+
+  it("lista as filiais com a padrão primeiro e filtra as telas pela escolhida", async () => {
+    const { app, login } = await createHarness();
+    const session = await login();
+    const list = (await session.get("/api/branches")).json() as BranchesResponse;
+    expect(list).toEqual({
+      available: true,
+      branches: [
+        { id: CENTRO, name: "Centro", isDefault: true },
+        { id: BARRA, name: "Barra", isDefault: false },
+      ],
+    });
+    const inBranch = (url: string, branch: string) => app.inject({ method: "GET", url, headers: { cookie: session.cookie, "x-branch-id": branch } });
+    const all = (await session.get("/api/groups")).json() as GroupsResponse;
+    const barra = (await (await inBranch("/api/groups", BARRA)).json()) as GroupsResponse;
+    const centro = (await (await inBranch("/api/groups", CENTRO)).json()) as GroupsResponse;
+    expect(barra.groups.map((group) => group.name).sort()).toEqual(["Dança Sex 15h", "Limpeza de pele Sáb 10h", "Pilates Sáb 9h"]);
+    expect(barra.groups.length + centro.groups.length).toBe(all.groups.length);
+    expect(barra.totals.capacity + centro.totals.capacity).toBe(all.totals.capacity);
+    expect((await inBranch("/api/overview", BARRA)).statusCode).toBe(200);
+    // O cache não mistura as filiais.
+    expect(((await session.get("/api/groups")).json() as GroupsResponse).groups).toHaveLength(all.groups.length);
+  });
+
+  it("recusa filial que o usuário não acessa com a mensagem do CRM", async () => {
+    const { app, login } = await createHarness();
+    const session = await login();
+    const response = await app.inject({ method: "GET", url: "/api/groups", headers: { cookie: session.cookie, "x-branch-id": "filial-inexistente" } });
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({ message: "Seu usuário não tem acesso a esta filial." });
+    // A lista continua disponível para trocar a filial salva.
+    const list = await app.inject({ method: "GET", url: "/api/branches", headers: { cookie: session.cookie, "x-branch-id": "filial-inexistente" } });
+    expect((list.json() as BranchesResponse).branches).toHaveLength(2);
+  });
+
+  it("sem a lista de filiais no CRM, avisa que não há seletor", async () => {
+    const { login } = await createHarness({ withoutBranches: true });
+    const session = await login();
+    expect((await session.get("/api/branches")).json()).toEqual({ available: false, branches: [] });
   });
 });
 

@@ -30,6 +30,8 @@ export interface MockCrmOptions {
   state?: MockState;
   /** Simula um CRM sem a fase 0 (sem login de usuário, linha de negócio nem /overdue). */
   withoutPhase0?: boolean;
+  /** Simula o CRM de hoje, cuja API externa ainda não lista as filiais. */
+  withoutBranches?: boolean;
 }
 
 const PREFIX = "/api/external/v1";
@@ -50,6 +52,11 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
     const userId = typeof token === "string" ? tokens.get(token) : undefined;
     return state.users.find((user) => user.id === userId) ?? state.users[0]!;
   };
+  /** Filial pedida no cabeçalho `X-Branch-Id` (mesma regra do CRM: sem ele, a rede toda). */
+  const branchOf = (request: FastifyRequest): string | undefined => {
+    const header = request.headers["x-branch-id"];
+    return typeof header === "string" && header.trim() && header.trim() !== "all" ? header.trim() : undefined;
+  };
   const can = (user: MockUser, permission: string) => user.role === "admin" || user.permissions.includes(permission);
   const seesFinance = (user: MockUser) => user.role === "admin" || user.modules.includes("finance");
 
@@ -60,6 +67,9 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
     const token = request.headers["x-crm-user-token"];
     if (phase0 && typeof token === "string" && !tokens.has(token))
       return fail(reply, 401, "INVALID_USER_TOKEN", "Sessão do usuário expirada. Entre de novo.");
+    const branch = branchOf(request);
+    if (phase0 && branch && !state.branches.some((item) => item.id === branch && item.active))
+      return fail(reply, 403, "BRANCH_ACCESS_DENIED", "Seu usuário não tem acesso a esta filial.");
   });
 
   const patient = (id: string) => state.patients.find((item) => item.id === id);
@@ -95,6 +105,7 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
     const overdue = members.map((item) => overdueOf(item.patientId)).filter((item): item is MemberOverdue => Boolean(item));
     return {
       id: group.id,
+      ...(phase0 ? { branchId: group.branchId } : {}),
       name: group.name,
       active: group.active,
       serviceId: svc.id,
@@ -195,12 +206,17 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
       return { token, expiresAt: new Date(Date.now() + 8 * 3600_000).toISOString(), user: summary };
     });
 
+  // --- Filiais (ainda não existe na API externa do CRM) -----------------------------------
+  if (phase0 && !options.withoutBranches) app.get(`${PREFIX}/branches`, async () => state.branches);
+
   // --- Turmas ---------------------------------------------------------------------------
   app.get(`${PREFIX}/groups`, async (request) => {
     const user = userOf(request);
     const query = request.query as { includeInactive?: string; businessLine?: string };
+    const branch = phase0 ? branchOf(request) : undefined;
     const rows = state.groups
       .filter((group) => group.active || query.includeInactive === "true")
+      .filter((group) => !branch || group.branchId === branch)
       .map((group) => groupRow(group, user))
       .filter((row) => !query.businessLine || row.businessLine === query.businessLine);
     const sum = (pick: (row: ExternalGroupRow) => number) => rows.reduce((total, row) => total + pick(row), 0);

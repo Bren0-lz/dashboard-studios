@@ -35,6 +35,12 @@ export interface CrmFeatures {
   overdue: boolean;
 }
 
+/** `GET /api/branches`: filiais do usuário; `available: false` = o CRM ainda não informa. */
+export interface BranchesResponse {
+  available: boolean;
+  branches: { id: string; name: string; isDefault: boolean }[];
+}
+
 export interface SessionInfo {
   user: { id: string; fullName: string; email: string };
   can: Capabilities;

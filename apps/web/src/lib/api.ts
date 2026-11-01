@@ -10,19 +10,27 @@ export class ApiError extends Error {
 }
 
 let csrfToken = "";
+let activeBranch = "";
 let onUnauthorized: () => void = () => {};
 
 export function setCsrfToken(token: string) {
   csrfToken = token;
 }
 
+/** Filial escolhida no topo (vazio = todas): vai no `X-Branch-Id` de cada chamada. */
+export function setActiveBranch(branchId: string) {
+  activeBranch = branchId;
+}
+
 export function setUnauthorizedHandler(handler: () => void) {
   onUnauthorized = handler;
 }
 
-export async function api<T>(path: string, init: { method?: string; body?: unknown; signal?: AbortSignal } = {}): Promise<T> {
+export async function api<T>(path: string, init: { method?: string; body?: unknown; signal?: AbortSignal; branchId?: string } = {}): Promise<T> {
   const method = init.method ?? "GET";
   const headers: Record<string, string> = { Accept: "application/json" };
+  const branch = init.branchId ?? activeBranch;
+  if (branch) headers["X-Branch-Id"] = branch;
   if (init.body !== undefined) headers["Content-Type"] = "application/json";
   if (method !== "GET") headers["X-CSRF-Token"] = csrfToken;
   let response: Response;

@@ -1,5 +1,6 @@
 import {
   apiIndexSchema,
+  branchesSchema,
   enrollmentResultSchema,
   groupDetailsSchema,
   groupsOverviewSchema,
@@ -20,6 +21,7 @@ import {
   type ExternalGroupsOverview,
   type ExternalOverdueReport,
   type ExternalPatientSummary,
+  type CrmBranch,
   type CrmLoginResult,
   type LeadBoard,
   type LeadInsights,
@@ -75,13 +77,32 @@ export class CrmGateway {
     }
   }
 
+  /** Com filial escolhida: só o que é dela (ou sem filial informada pelo CRM). */
+  private ofBranch = <T extends { branchId?: string | undefined }>(item: T) =>
+    !this.branchId || !item.branchId || item.branchId === this.branchId;
+
   index = () => this.read<ExternalApiIndex>("", apiIndexSchema);
-  groups = () => this.read<ExternalGroupsOverview>("/groups", groupsOverviewSchema);
+  /**
+   * Filiais que o usuário pode escolher. Sem `X-Branch-Id` (uma filial salva que deixou de existir
+   * não pode esconder a lista); `null` = o CRM ainda não oferece a rota.
+   */
+  branches = () =>
+    optional(
+      () =>
+        this.cache.get(`${this.cacheScope}||/branches`, () =>
+          this.client.request({ path: "/branches", userToken: this.userToken }, branchesSchema),
+        ) as Promise<CrmBranch[]>,
+    );
+  /** O CRM ainda não filtra a tabela de turmas por filial: o filtro também é feito aqui. */
+  groups = async (): Promise<ExternalGroupsOverview> => {
+    const overview = await this.read<ExternalGroupsOverview>("/groups", groupsOverviewSchema);
+    return this.branchId ? { ...overview, groups: overview.groups.filter(this.ofBranch) } : overview;
+  };
   groupDetails = (id: string) => this.read<ExternalGroupDetails>(`/groups/${encodeURIComponent(id)}`, groupDetailsSchema);
   /** Sem cache: usado para comparar antes/depois de uma gravação. */
   groupDetailsFresh = (id: string) =>
     this.client.request({ path: `/groups/${encodeURIComponent(id)}`, userToken: this.userToken, branchId: this.branchId }, groupDetailsSchema) as Promise<ExternalGroupDetails>;
-  waitlist = () => this.read<WaitlistEntry[]>("/waitlist", z.array(waitlistEntrySchema));
+  waitlist = async () => (await this.read<WaitlistEntry[]>("/waitlist", z.array(waitlistEntrySchema))).filter(this.ofBranch);
   services = () => this.read<Service[]>("/services", z.array(serviceSchema));
   professionals = () => this.read<Professional[]>("/professionals", z.array(professionalSchema));
   overdue = () => optional(() => this.read<ExternalOverdueReport>("/overdue", overdueReportSchema));

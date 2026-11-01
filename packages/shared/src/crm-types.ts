@@ -17,6 +17,17 @@ export interface GroupWeeklySlot {
   endTime: string;
 }
 
+/**
+ * Filial que o usuário pode escolher (`GET /branches` do CRM). Ainda não existe na API externa:
+ * sem ela o seletor de filial some e o painel mostra a rede toda.
+ */
+export interface CrmBranch {
+  id: string;
+  name: string;
+  active: boolean;
+  isDefault: boolean;
+}
+
 export type GroupEnrollmentStatus = "active" | "waitlisted" | "cancelled";
 
 /** Fase 0 (3.2): atraso do inscrito. Só vem para quem tem `finance.view`. */

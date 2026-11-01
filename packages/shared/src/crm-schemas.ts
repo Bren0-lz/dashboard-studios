@@ -147,6 +147,10 @@ export const serviceSchema = z.looseObject({
   businessLine,
 });
 
+export const branchesSchema = z.array(
+  z.looseObject({ id: z.string(), name: z.string(), active: z.boolean().default(true), isDefault: z.boolean().default(false) }),
+);
+
 export const professionalSchema = z.looseObject({ id: z.string(), fullName: z.string(), active: z.boolean() });
 
 export const leadSchema = z.looseObject({
