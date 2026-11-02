@@ -161,6 +161,9 @@ describe("visão geral, vendas e leads", () => {
     const overview = (await session.get("/api/overview")).json() as OverviewResponse;
     expect(overview.month).toBe("2026-10");
     expect(overview.goal?.goalInCents).toBe(2_800_000);
+    // Descontos do cliente nas vendas do mês, vindos do CRM.
+    expect(overview.sales.discounts.customerInCents).toBeGreaterThan(0);
+    expect(overview.sales.discounts.customerInCents % 1_500).toBe(0);
     expect(overview.dailySales).toHaveLength(31);
     expect(overview.opportunities.length).toBeGreaterThan(0);
     expect(overview.opportunities[0]!.kind).toBe("offer_seat");

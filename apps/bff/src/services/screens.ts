@@ -157,13 +157,19 @@ function periodForLine(summary: SalesReportPeriod, sales: readonly SaleMovement[
   const own = sales.filter((sale) => matchesLine(sale, line));
   const gross = own.filter((sale) => sale.kind === "sale").reduce((sum, sale) => sum + sale.amountInCents, 0);
   const cancelled = own.filter((sale) => sale.kind === "cancellation").reduce((sum, sale) => sum + Math.abs(sale.amountInCents), 0);
+  const customerDiscount = own.filter((sale) => sale.kind === "sale").reduce((sum, sale) => sum + (sale.customerDiscountInCents ?? 0), 0);
+  // O desconto na baixa, como o recebido, não se separa por linha: fica de fora.
+  const { settlementDiscountInCents: _settlement, customerDiscountInCents: _customer, ...rest } = summary;
+  void _settlement;
+  void _customer;
   return {
-    ...summary,
+    ...rest,
     grossSalesInCents: gross,
     cancelledSalesInCents: cancelled,
     netSalesInCents: gross - cancelled,
     buyers: new Set(own.filter((sale) => sale.kind === "sale").map((sale) => sale.patientId)).size,
     payment: { paidInCents: 0, openInCents: 0, overdueInCents: 0 },
+    ...(customerDiscount ? { customerDiscountInCents: customerDiscount } : {}),
   };
 }
 
@@ -324,6 +330,10 @@ export async function overviewScreen(ctx: ScreenContext, line: LineFilter, goals
       currentInCents: currentSummary.netSalesInCents,
       previousInCents: previousSummary.netSalesInCents,
       changePercent: changePercent(currentSummary.netSalesInCents, previousSummary.netSalesInCents),
+      discounts: {
+        customerInCents: currentSummary.customerDiscountInCents ?? 0,
+        settlementInCents: currentSummary.settlementDiscountInCents ?? 0,
+      },
     },
     goal: goalProgress(goalFor(goals, line), currentSummary.netSalesInCents, ctx.today),
     idleRevenueInCents: groupsView.totals.idleRevenueInCents,

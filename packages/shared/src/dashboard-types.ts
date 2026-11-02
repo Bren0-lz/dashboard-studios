@@ -157,7 +157,13 @@ export interface OverviewResponse {
   month: string;
   today: string;
   features: CrmFeatures;
-  sales: { currentInCents: number; previousInCents: number; changePercent: number | null };
+  sales: {
+    currentInCents: number;
+    previousInCents: number;
+    changePercent: number | null;
+    /** Descontos do mês: do cliente nas vendas e, sem filtro de linha, os dados na baixa. */
+    discounts: { customerInCents: number; settlementInCents: number };
+  };
   goal: GoalProgress | null;
   idleRevenueInCents: number;
   freeSeats: number;

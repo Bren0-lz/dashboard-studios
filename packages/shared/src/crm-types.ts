@@ -205,7 +205,10 @@ export interface SalesReportPeriod {
   buyers: number;
   /** Contas a receber das vendas do período (sem as canceladas). */
   payment: { paidInCents: number; openInCents: number; overdueInCents: number };
+  /** Descontos do cliente nas vendas (planos e produtos) do período. */
   customerDiscountInCents?: number;
+  /** Descontos dados na baixa das cobranças das vendas do período. */
+  settlementDiscountInCents?: number;
 }
 
 export interface SalesReport {
