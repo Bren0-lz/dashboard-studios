@@ -120,6 +120,34 @@ describe("turmas", () => {
   });
 });
 
+describe("filiais", () => {
+  it("filtra as turmas pela filial escolhida no topo e mantém a escolha ao trocar de tela", async () => {
+    const { calls } = await startServer();
+    const user = userEvent.setup();
+    renderAt("/turmas");
+    await login(user);
+    expect(await screen.findByRole("button", { name: "Pilates Ter/Qui 18h" })).toBeInTheDocument();
+    const select = await screen.findByLabelText("Filial");
+    expect(within(select).getAllByRole("option").map((option) => option.textContent)).toEqual(["Todas as filiais", "Centro", "Barra"]);
+    await user.selectOptions(select, "Barra");
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Pilates Ter/Qui 18h" })).not.toBeInTheDocument());
+    expect(await screen.findByRole("button", { name: "Pilates Sáb 9h" })).toBeInTheDocument();
+    await user.click(screen.getByRole("link", { name: "Visão geral" }));
+    expect(await screen.findByRole("heading", { name: "Como estão as vendas hoje?" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Filial")).toHaveDisplayValue("Barra");
+    expect(calls.filter((call) => call.url === "/api/overview").map((call) => call.branch)).toEqual(["00000000-0000-4000-8000-510000000002"]);
+  });
+
+  it("esconde o seletor quando o CRM ainda não lista as filiais", async () => {
+    await startServer({ withoutBranches: true });
+    const user = userEvent.setup();
+    renderAt("/turmas");
+    await login(user);
+    expect(await screen.findByRole("button", { name: "Pilates Ter/Qui 18h" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Filial")).not.toBeInTheDocument();
+  });
+});
+
 describe("espera, inadimplência e calendário", () => {
   it("destaca vaga compatível na lista de espera", async () => {
     await startServer();

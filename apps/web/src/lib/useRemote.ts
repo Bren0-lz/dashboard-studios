@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
+import { useBranchFilter } from "./filters";
 
 /** Dados com no máximo 60 s de idade: recarrega sozinho e ao voltar para a aba. */
 export const REFRESH_MS = 60_000;
@@ -18,17 +19,20 @@ export function useRemote<T>(path: string | null): Remote<T> {
   const [loading, setLoading] = useState(Boolean(path));
   const [updatedAt, setUpdatedAt] = useState<number | null>(null);
   const [tick, setTick] = useState(0);
-  const lastPath = useRef(path);
+  const [branch] = useBranchFilter();
+  const lastKey = useRef(`${branch}|${path}`);
 
   useEffect(() => {
     if (!path) return;
     const controller = new AbortController();
-    if (lastPath.current !== path) {
-      lastPath.current = path;
+    const key = `${branch}|${path}`;
+    if (lastKey.current !== key) {
+      lastKey.current = key;
       setData(null);
     }
     setLoading(true);
-    api<T>(path, { signal: controller.signal })
+    // A filial vai explícita: o efeito da tela roda antes de o topo atualizar `setActiveBranch`.
+    api<T>(path, { signal: controller.signal, branchId: branch })
       .then((value) => {
         setData(value);
         setError(null);
@@ -41,7 +45,7 @@ export function useRemote<T>(path: string | null): Remote<T> {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [path, tick]);
+  }, [path, branch, tick]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {

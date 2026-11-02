@@ -36,6 +36,7 @@ export interface MockPatient {
 
 export interface MockGroup {
   id: string;
+  branchId: string;
   name: string;
   active: boolean;
   serviceId: string;
@@ -132,6 +133,7 @@ export interface MockPlanTemplate {
 
 export interface MockState {
   clinic: { id: string; name: string };
+  branches: { id: string; name: string; active: boolean; isDefault: boolean }[];
   users: MockUser[];
   services: MockService[];
   professionals: { id: string; fullName: string; active: boolean; color: string }[];
@@ -194,15 +196,19 @@ export function createDemoState(today: string): MockState {
       tags: n % 5 === 0 ? ["VIP"] : [],
     };
   });
+  const branches = [
+    { id: id("51", 1), name: "Centro", active: true, isDefault: true },
+    { id: id("51", 2), name: "Barra", active: true, isDefault: false },
+  ];
   const groups: MockGroup[] = [
-    { id: id("55", 1), name: "Pilates Ter/Qui 18h", active: true, serviceId: pilates.id, professionalId: professionals[0]!.id, roomId: rooms[0]!.id, capacity: 8, weeklySlots: slots([2, 4], "18:00") },
-    { id: id("55", 2), name: "Pilates Seg/Qua 7h", active: true, serviceId: pilates.id, professionalId: professionals[0]!.id, roomId: rooms[0]!.id, capacity: 8, weeklySlots: slots([1, 3], "07:00") },
-    { id: id("55", 3), name: "Pilates Seg/Qua 19h", active: true, serviceId: pilates.id, professionalId: professionals[1]!.id, roomId: rooms[0]!.id, capacity: 6, weeklySlots: slots([1, 3], "19:00") },
-    { id: id("55", 4), name: "Pilates Sáb 9h", active: true, serviceId: pilates.id, professionalId: professionals[1]!.id, roomId: rooms[0]!.id, capacity: 8, weeklySlots: slots([6], "09:00") },
-    { id: id("55", 5), name: "Dança Ter/Qui 19h", active: true, serviceId: danca.id, professionalId: professionals[1]!.id, roomId: rooms[1]!.id, capacity: 12, weeklySlots: slots([2, 4], "19:00") },
-    { id: id("55", 6), name: "Dança Sex 15h", active: true, serviceId: danca.id, professionalId: professionals[1]!.id, roomId: rooms[1]!.id, capacity: 10, weeklySlots: slots([5], "15:00") },
-    { id: id("55", 7), name: "Laser Qua 14h", active: true, serviceId: laser.id, professionalId: professionals[2]!.id, roomId: rooms[2]!.id, capacity: 4, weeklySlots: slots([3], "14:00", 120) },
-    { id: id("55", 8), name: "Limpeza de pele Sáb 10h", active: true, serviceId: pele.id, professionalId: professionals[2]!.id, roomId: rooms[2]!.id, capacity: 3, weeklySlots: slots([6], "10:00", 90) },
+    { id: id("55", 1), branchId: branches[0]!.id, name: "Pilates Ter/Qui 18h", active: true, serviceId: pilates.id, professionalId: professionals[0]!.id, roomId: rooms[0]!.id, capacity: 8, weeklySlots: slots([2, 4], "18:00") },
+    { id: id("55", 2), branchId: branches[0]!.id, name: "Pilates Seg/Qua 7h", active: true, serviceId: pilates.id, professionalId: professionals[0]!.id, roomId: rooms[0]!.id, capacity: 8, weeklySlots: slots([1, 3], "07:00") },
+    { id: id("55", 3), branchId: branches[0]!.id, name: "Pilates Seg/Qua 19h", active: true, serviceId: pilates.id, professionalId: professionals[1]!.id, roomId: rooms[0]!.id, capacity: 6, weeklySlots: slots([1, 3], "19:00") },
+    { id: id("55", 4), branchId: branches[1]!.id, name: "Pilates Sáb 9h", active: true, serviceId: pilates.id, professionalId: professionals[1]!.id, roomId: rooms[0]!.id, capacity: 8, weeklySlots: slots([6], "09:00") },
+    { id: id("55", 5), branchId: branches[0]!.id, name: "Dança Ter/Qui 19h", active: true, serviceId: danca.id, professionalId: professionals[1]!.id, roomId: rooms[1]!.id, capacity: 12, weeklySlots: slots([2, 4], "19:00") },
+    { id: id("55", 6), branchId: branches[1]!.id, name: "Dança Sex 15h", active: true, serviceId: danca.id, professionalId: professionals[1]!.id, roomId: rooms[1]!.id, capacity: 10, weeklySlots: slots([5], "15:00") },
+    { id: id("55", 7), branchId: branches[0]!.id, name: "Laser Qua 14h", active: true, serviceId: laser.id, professionalId: professionals[2]!.id, roomId: rooms[2]!.id, capacity: 4, weeklySlots: slots([3], "14:00", 120) },
+    { id: id("55", 8), branchId: branches[1]!.id, name: "Limpeza de pele Sáb 10h", active: true, serviceId: pele.id, professionalId: professionals[2]!.id, roomId: rooms[2]!.id, capacity: 3, weeklySlots: slots([6], "10:00", 90) },
   ];
   // Inscritos por turma (ativos) e lista de espera da turma.
   const layout: [number, number][] = [
@@ -340,6 +346,7 @@ export function createDemoState(today: string): MockState {
   ];
   return {
     clinic: { id: id("50", 1), name: "Studios Aryana" },
+    branches,
     users: [
       { id: id("64", 1), fullName: "Aryana Mendes", email: "admin@aryana.com", password: "senha123", role: "admin", modules: ["finance", "groups", "crm"], permissions: fullPermissions },
       { id: id("64", 2), fullName: "Vitória Recepção", email: "vendas@aryana.com", password: "senha123", role: "user", modules: ["groups", "crm"], permissions: ["crm.stage", "crm.contacts_create", "waitlist.manage"] },

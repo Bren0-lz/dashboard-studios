@@ -173,6 +173,23 @@ a {
   background: rgba(243, 241, 235, 0.96);
   border-bottom: 1px solid var(--line);
 }
+.topbar-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+.branch-select select {
+  min-height: 36px;
+  max-width: 100%;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
 .content {
   display: flex;
   flex-direction: column;

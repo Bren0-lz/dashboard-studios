@@ -22,3 +22,32 @@ export function withLine(path: string, line: LineFilter): string {
   if (line === "all") return path;
   return `${path}${path.includes("?") ? "&" : "?"}linha=${line}`;
 }
+
+/** Filial escolhida, salva na URL (`?filial=`); vazio = todas as filiais do usuário. */
+export function useBranchFilter(): [string, (branchId: string) => void] {
+  const [params, setParams] = useSearchParams();
+  const branch = params.get("filial") ?? "";
+  const setBranch = (next: string) =>
+    setParams(
+      (current) => {
+        const copy = new URLSearchParams(current);
+        if (next) copy.set("filial", next);
+        else copy.delete("filial");
+        return copy;
+      },
+      { replace: true },
+    );
+  return [branch, setBranch];
+}
+
+/** Filtros globais (`linha`, `filial`) que acompanham a navegação entre as telas. */
+export function globalFilters(search: string): string {
+  const current = new URLSearchParams(search);
+  const kept = new URLSearchParams();
+  for (const key of ["linha", "filial"]) {
+    const value = current.get(key);
+    if (value) kept.set(key, value);
+  }
+  const text = kept.toString();
+  return text ? `?${text}` : "";
+}

@@ -1,7 +1,10 @@
+import { useEffect } from "react";
 import { CalendarDays, Clock3, LayoutDashboard, LogOut, Receipt, RefreshCw, Users } from "lucide-react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { businessLineLabels, type LineFilter } from "@dash/shared";
-import { useLineFilter } from "../lib/filters";
+import { businessLineLabels, type BranchesResponse, type LineFilter } from "@dash/shared";
+import { setActiveBranch } from "../lib/api";
+import { globalFilters, useBranchFilter, useLineFilter } from "../lib/filters";
+import { useRemote } from "../lib/useRemote";
 import { useSession } from "../lib/session";
 
 const nav = [
@@ -31,11 +34,44 @@ export function LineSwitch() {
   );
 }
 
+/**
+ * Filial (rede toda ou uma só). Some quando o CRM ainda não informa as filiais ou o usuário só
+ * tem uma; uma filial salva na URL que não está mais na lista volta para "Todas as filiais".
+ */
+export function BranchSelect() {
+  const [branch, setBranch] = useBranchFilter();
+  const { data } = useRemote<BranchesResponse>("/branches");
+  const branches = data?.branches ?? [];
+  const known = !branch || branches.some((item) => item.id === branch);
+
+  useEffect(() => {
+    if (data && !known) setBranch("");
+  }, [data, known, setBranch]);
+
+  if (!data?.available || branches.length < 2) return null;
+  return (
+    <label className="branch-select">
+      <span className="sr-only">Filial</span>
+      <select value={known ? branch : ""} onChange={(event) => setBranch(event.target.value)}>
+        <option value="">Todas as filiais</option>
+        {branches.map((item) => (
+          <option key={item.id} value={item.id}>
+            {item.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 export function Layout() {
   const { session, logout } = useSession();
   const location = useLocation();
-  const search = new URLSearchParams(location.search);
-  const keep = search.get("linha") ? `?linha=${search.get("linha")}` : "";
+  const keep = globalFilters(location.search);
+  const [branch] = useBranchFilter();
+
+  // Gravações e buscas feitas fora do `useRemote` (inscrever, buscar cliente) usam a mesma filial.
+  useEffect(() => setActiveBranch(branch), [branch]);
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -60,7 +96,10 @@ export function Layout() {
       </aside>
       <div className="main">
         <div className="topbar">
-          <LineSwitch />
+          <div className="topbar-filters">
+            <LineSwitch />
+            <BranchSelect />
+          </div>
           <button type="button" className="secondary-button" onClick={() => window.dispatchEvent(new Event("dash:refresh"))}>
             <RefreshCw size={16} aria-hidden /> Atualizar
           </button>

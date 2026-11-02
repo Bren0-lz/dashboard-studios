@@ -68,6 +68,10 @@ em `packages/shared/src/crm-types.ts` (campos marcados "fase 0"):
 | 3.3 `POST /groups/:id/waitlist/:enrollmentId/promote` | O botão "Promover" responde que o CRM ainda não oferece; cancelar uma inscrição continua promovendo |
 | `GET /external/v1/plan-templates` (não estava no planejamento) | "Vender plano" some; fica só "inscrever" |
 
-Também não existe ainda na API externa: lista de filiais (o BFF já repassa `X-Branch-Id`),
-profissional da venda em `SaleMovement` (o ranking por profissional fica vazio) e o calendário
+Filiais: o seletor no topo (`?filial=` na URL) manda `X-Branch-Id` em todas as chamadas e o BFF
+também filtra turmas e lista de espera pelo `branchId`. Ele lê as filiais de
+`GET /external/v1/branches`, que ainda não existe na API externa do CRM: sem essa rota (ou com uma
+filial só) o seletor some e o painel mostra a rede toda.
+
+Também não existe ainda na API externa: profissional da venda em `SaleMovement` (o ranking por profissional fica vazio) e o calendário
 de encontros (`/group-sessions`); o calendário usa os horários fixos das turmas.
