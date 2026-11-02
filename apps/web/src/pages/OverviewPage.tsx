@@ -65,6 +65,7 @@ export function OverviewPage() {
                   </span>
                 </div>
               ) : null}
+              {discountsLine(data.sales.discounts) ? <span className="kpi-detail">{discountsLine(data.sales.discounts)}</span> : null}
             </Kpi>
             <Kpi
               label="Receita parada"
@@ -211,4 +212,15 @@ function GoalsDialog({ goals, onClose, onSaved }: { goals: Goals; onClose: () =>
       </form>
     </Modal>
   );
+}
+
+/** Descontos do mês: os do cliente nas vendas e os dados na baixa, quando houver. */
+function discountsLine(discounts: OverviewResponse["sales"]["discounts"] | undefined) {
+  if (!discounts) return "";
+  return [
+    discounts.customerInCents > 0 ? `${formatMoney(discounts.customerInCents)} em descontos a clientes` : "",
+    discounts.settlementInCents > 0 ? `${formatMoney(discounts.settlementInCents)} em descontos na baixa` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }

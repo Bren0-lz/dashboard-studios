@@ -74,6 +74,8 @@ export interface MockReceivable {
   amountInCents: number;
   status: "open" | "paid";
   paidAt?: string;
+  /** Desconto dado na baixa. */
+  discountInCents?: number;
 }
 
 export interface MockSale {
@@ -88,6 +90,8 @@ export interface MockSale {
   amountInCents: number;
   serviceId: string;
   professionalId?: string;
+  /** Desconto do cliente na venda (`amountInCents` já vem com ele abatido). */
+  customerDiscountInCents?: number;
 }
 
 export interface MockWaitlistEntry {
@@ -247,7 +251,16 @@ export function createDemoState(today: string): MockState {
         const dueDate = addDays(validFrom, month * 30 + 5);
         const overdueCase = counter % 4 === 1 && month === 1;
         const paid = !overdueCase && dueDate < today;
-        receivables.push({ id: id("58", counter * 10 + month), patientId: patient.id, planId, dueDate, amountInCents: monthly, status: paid ? "paid" : "open", ...(paid ? { paidAt: dueDate } : {}) });
+        receivables.push({
+          id: id("58", counter * 10 + month),
+          patientId: patient.id,
+          planId,
+          dueDate,
+          amountInCents: monthly,
+          status: paid ? "paid" : "open",
+          ...(paid ? { paidAt: dueDate } : {}),
+          ...(paid && counter % 5 === 0 ? { discountInCents: 1_000 } : {}),
+        });
       }
       sales.push({
         id: id("59", counter),
@@ -282,6 +295,7 @@ export function createDemoState(today: string): MockState {
       amountInCents: service.priceInCents * (1 + (day % 3)),
       serviceId: service.id,
       professionalId: professionals[(day + 1) % professionals.length]!.id,
+      ...(day % 4 === 0 && day % 17 !== 0 ? { customerDiscountInCents: 1_500 } : {}),
     });
   }
   const waitlist: MockWaitlistEntry[] = [

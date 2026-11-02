@@ -157,6 +157,7 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
       itemName: sale.itemName,
       quantity: sale.quantity,
       amountInCents: sale.amountInCents,
+      ...(sale.customerDiscountInCents ? { customerDiscountInCents: sale.customerDiscountInCents } : {}),
       ...(phase0 ? { businessLine: service(sale.serviceId)?.businessLine ?? "studio" } : {}),
       ...(sale.professionalId ? { professionalName: professional(sale.professionalId)?.fullName ?? "" } : {}),
     };
@@ -168,8 +169,22 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
     const cancelled = sales.filter((sale) => sale.kind === "cancellation").reduce((sum, sale) => sum + sale.amountInCents, 0);
     const received = state.receivables.filter((item) => item.paidAt && item.paidAt >= from && item.paidAt <= to).reduce((sum, item) => sum + item.amountInCents, 0);
     const buyers = new Set(sales.filter((sale) => sale.kind === "sale").map((sale) => sale.patientId)).size;
+    const customerDiscount = sales.filter((sale) => sale.kind === "sale").reduce((sum, sale) => sum + (sale.customerDiscountInCents ?? 0), 0);
+    const settlementDiscount = state.receivables
+      .filter((item) => item.paidAt && item.paidAt >= from && item.paidAt <= to)
+      .reduce((sum, item) => sum + (item.discountInCents ?? 0), 0);
     return {
-      summary: { from, to, grossSalesInCents: gross, cancelledSalesInCents: cancelled, netSalesInCents: gross - cancelled, buyers, payment: { paidInCents: received, openInCents: 0, overdueInCents: 0 } },
+      summary: {
+        from,
+        to,
+        grossSalesInCents: gross,
+        cancelledSalesInCents: cancelled,
+        netSalesInCents: gross - cancelled,
+        buyers,
+        payment: { paidInCents: received, openInCents: 0, overdueInCents: 0 },
+        ...(customerDiscount ? { customerDiscountInCents: customerDiscount } : {}),
+        ...(settlementDiscount ? { settlementDiscountInCents: settlementDiscount } : {}),
+      },
       sales: sales.map(saleMovement),
     };
   }
