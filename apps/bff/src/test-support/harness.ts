@@ -41,8 +41,14 @@ export function testConfig(overrides: Partial<Config> = {}): Config {
 
 export async function createHarness(options: Partial<MockCrmOptions> = {}) {
   const crm = buildMockCrm({ apiKey: API_KEY, today: TODAY, ...options });
+  /** Chamadas que o BFF fez ao CRM (método e caminho, sem o prefixo da API externa). */
+  const crmCalls: string[] = [];
+  const forward = injectFetch(crm.app);
   const app = await buildApp(testConfig(), {
-    fetch: injectFetch(crm.app),
+    fetch: (input, init) => {
+      crmCalls.push(`${init?.method ?? "GET"} ${new URL(input).pathname.replace(/^\/api\/external\/v1/, "")}`);
+      return forward(input, init);
+    },
     goals: memoryGoalsStore({ studio: 2_000_000, aesthetics: 800_000 }),
     today: () => TODAY,
   });
@@ -62,5 +68,5 @@ export async function createHarness(options: Partial<MockCrmOptions> = {}) {
     };
   }
 
-  return { app, crm, login };
+  return { app, crm, crmCalls, login };
 }

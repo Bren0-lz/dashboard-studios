@@ -65,6 +65,11 @@ export interface ExternalGroupRow {
   overdueMembers?: number;
   /** Fase 0 (3.2). */
   overdueInCents?: number;
+  /**
+   * PX4: nomes dos inscritos ativos (sem a espera), na ordem de inscrição; só nomes, sem depender de
+   * `patients.view`. Sem o campo (CRM antigo), o cartão da turma fica sem as bolinhas.
+   */
+  memberNames?: string[];
 }
 
 export interface ExternalGroupsTotals {

@@ -32,6 +32,7 @@ export const groupRowSchema = z.looseObject({
   businessLine,
   overdueMembers: z.number().optional(),
   overdueInCents: z.number().optional(),
+  memberNames: z.array(z.string()).optional(),
 });
 
 export const groupsOverviewSchema = z.looseObject({

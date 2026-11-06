@@ -32,6 +32,8 @@ export interface MockCrmOptions {
   withoutPhase0?: boolean;
   /** Simula o CRM de hoje, cuja API externa ainda não lista as filiais. */
   withoutBranches?: boolean;
+  /** Simula um CRM sem a PX4 (lista de turmas sem `memberNames`). */
+  withoutMemberNames?: boolean;
 }
 
 const PREFIX = "/api/external/v1";
@@ -95,7 +97,9 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
   }
 
   function groupRow(group: MockGroup, user: MockUser): ExternalGroupRow {
-    const members = state.enrollments.filter((item) => item.groupId === group.id && item.status === "active");
+    const members = state.enrollments
+      .filter((item) => item.groupId === group.id && item.status === "active")
+      .sort((a, b) => a.enrolledAt.localeCompare(b.enrolledAt));
     const waiting = state.enrollments.filter((item) => item.groupId === group.id && item.status === "waitlisted");
     const svc = service(group.serviceId)!;
     const revenue = members.reduce((sum, item) => sum + (monthlyOf(item.patientId, group.serviceId) ?? 0), 0);
@@ -125,6 +129,8 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
       monthlyRevenueInCents: revenue,
       potentialMonthlyRevenueInCents: Math.round(revenue + freeSeats * ticket),
       ...(phase0 ? { businessLine: svc.businessLine } : {}),
+      // PX4: nomes dos inscritos ativos, na ordem de inscrição (só nomes, sem `patients.view`).
+      ...(options.withoutMemberNames ? {} : { memberNames: members.map((item) => patient(item.patientId)?.fullName ?? "") }),
       ...(phase0 && seesFinance(user)
         ? { overdueMembers: overdue.length, overdueInCents: overdue.reduce((sum, item) => sum + item.amountInCents, 0) }
         : {}),

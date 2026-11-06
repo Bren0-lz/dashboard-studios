@@ -103,6 +103,17 @@ describe("turmas", () => {
     expect(await screen.findByRole("dialog", { name: "Dança Ter/Qui 19h" })).toBeInTheDocument();
   });
 
+  it("com um CRM sem os nomes na lista, mostra os cartões sem bolinhas", async () => {
+    await startServer({ withoutMemberNames: true });
+    const user = userEvent.setup();
+    renderAt("/turmas");
+    await login(user);
+    const card = await screen.findByRole("article", { name: "Dança Ter/Qui 19h" });
+    expect(card).toHaveTextContent("9/12 · 3 vagas");
+    expect(within(card).queryByRole("button", { name: /^Ver alunos de/ })).not.toBeInTheDocument();
+    expect(within(card).queryByText(/^[A-ZÀ-Ú]{2}$/)).not.toBeInTheDocument();
+  });
+
   it("abre a inadimplência da turma pelo \"Pagamentos atrasados\" do cartão", async () => {
     await startServer();
     const user = userEvent.setup();

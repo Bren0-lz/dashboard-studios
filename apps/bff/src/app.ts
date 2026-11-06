@@ -212,7 +212,7 @@ export async function buildApp(config: Config, deps: AppDeps = {}): Promise<Fast
 
   app.get("/api/overview", async (request) => overviewScreen(ctxOf(request), lineOfQuery(request), await goals.read()));
 
-  app.get("/api/groups", async (request) => groupsScreen(ctxOf(request), lineOfQuery(request), { memberNames: true }));
+  app.get("/api/groups", async (request) => groupsScreen(ctxOf(request), lineOfQuery(request)));
 
   app.get("/api/groups/:id", async (request) => {
     const { id } = request.params as { id: string };

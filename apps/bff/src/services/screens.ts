@@ -74,34 +74,13 @@ async function loadOverdue(ctx: ScreenContext, groups: readonly ExternalGroupRow
   return { available: true, rows, referenceDate: report.referenceDate };
 }
 
-/**
- * Nomes dos inscritos ativos de cada turma (bolinhas do cartão), lidos do detalhe da turma com o
- * mesmo cache curto. Uma turma que falhar fica sem as bolinhas, sem derrubar a tela.
- */
-async function memberNamesOf(ctx: ScreenContext, groups: readonly ExternalGroupRow[]): Promise<Map<string, string[]>> {
-  const entries = await Promise.all(
-    groups.map(async (group) => {
-      try {
-        const details = await ctx.gateway.groupDetails(group.id);
-        return [group.id, details.members.filter((member) => member.status === "active").map((member) => member.patientName)] as const;
-      } catch {
-        return null;
-      }
-    }),
-  );
-  return new Map(entries.filter((entry) => entry !== null));
-}
-
-export async function groupsScreen(ctx: ScreenContext, line: LineFilter, options: { memberNames?: boolean } = {}): Promise<GroupsResponse> {
+/** Os nomes das bolinhas do cartão (`memberNames`, PX4) vêm na própria lista do CRM: nenhuma leitura por turma. */
+export async function groupsScreen(ctx: ScreenContext, line: LineFilter): Promise<GroupsResponse> {
   const [overview, waitlist, templates] = await Promise.all([ctx.gateway.groups(), ctx.gateway.waitlist(), ctx.gateway.planTemplates()]);
   const overdue = ctx.seeFinance ? await ctx.gateway.overdue() : null;
-  const ofLine = overview.groups.filter((group) => matchesLine(group, line));
-  const names = options.memberNames ? await memberNamesOf(ctx, ofLine) : null;
-  const rows = enrichGroups(ofLine, waitlist).map((row) => {
-    const view = ctx.seeFinance ? row : { ...row, overdueMembers: 0, overdueInCents: 0 };
-    const memberNames = names?.get(row.id);
-    return memberNames ? { ...view, memberNames } : view;
-  });
+  const rows = enrichGroups(overview.groups.filter((group) => matchesLine(group, line)), waitlist).map((row) =>
+    ctx.seeFinance ? row : { ...row, overdueMembers: 0, overdueInCents: 0 },
+  );
   const sum = (pick: (row: (typeof rows)[number]) => number) => rows.reduce((total, row) => total + pick(row), 0);
   const capacity = sum((row) => (row.active ? row.capacity : 0));
   const enrolled = sum((row) => (row.active ? row.enrolled : 0));

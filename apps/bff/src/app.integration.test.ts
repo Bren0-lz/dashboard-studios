@@ -118,15 +118,34 @@ describe("turmas", () => {
     expect(after.groups.find((group) => group.id === open.id)!.enrolled).toBe(open.enrolled + 1);
   });
 
-  it("manda os nomes dos inscritos ativos para as bolinhas do cartão", async () => {
-    const { login } = await createHarness();
+  it("repassa os nomes dos inscritos ativos que vêm na lista do CRM (PX4), sem ler cada turma", async () => {
+    const { login, crmCalls } = await createHarness();
     const session = await login();
-    const groups = (await session.get("/api/groups")).json() as GroupsResponse;
+    crmCalls.length = 0;
+    const response = await session.get("/api/groups");
+    expect(response.statusCode).toBe(200);
+    expect(crmCalls).toContain("GET /groups");
+    expect(crmCalls.filter((call) => /^GET \/groups\/./.test(call))).toEqual([]);
+    const groups = response.json() as GroupsResponse;
     const full = groups.groups.find((group) => group.name === "Pilates Ter/Qui 18h")!;
     const details = (await session.get(`/api/groups/${full.id}`)).json() as GroupDetailsResponse;
-    expect(full.memberNames).toEqual(details.members.filter((member) => member.status === "active").map((member) => member.patientName));
-    expect(full.memberNames).toHaveLength(full.enrolled);
+    expect(full.memberNames).toEqual(details.members.map((member) => member.patientName));
+    expect(full.memberNames).not.toContain(details.waitlist[0]!.patientName);
     expect(groups.groups.every((group) => group.memberNames?.length === group.enrolled)).toBe(true);
+    // A visão geral também não lê turma por turma.
+    crmCalls.length = 0;
+    expect((await session.get("/api/overview")).statusCode).toBe(200);
+    expect(crmCalls.filter((call) => /^GET \/groups\/./.test(call))).toEqual([]);
+  });
+
+  it("com um CRM sem memberNames (antes da PX4), a tela de turmas responde sem as bolinhas", async () => {
+    const { login } = await createHarness({ withoutMemberNames: true });
+    const session = await login();
+    const response = await session.get("/api/groups");
+    expect(response.statusCode).toBe(200);
+    const groups = response.json() as GroupsResponse;
+    expect(groups.groups.length).toBeGreaterThan(0);
+    expect(groups.groups.every((group) => group.memberNames === undefined)).toBe(true);
   });
 
   it("mostra o contato dos alunos (telefone e WhatsApp) só a quem tem patients.view", async () => {
@@ -149,7 +168,7 @@ describe("turmas", () => {
   });
 
   it("depois de inscrever, o cartão e o detalhe da turma saem atualizados apesar do cache de 45 s", async () => {
-    const { login } = await createHarness();
+    const { crm, login } = await createHarness();
     const session = await login();
     const before = (await session.get("/api/groups")).json() as GroupsResponse;
     const open = before.groups.find((group) => group.name === "Pilates Sáb 9h")!;
@@ -160,7 +179,9 @@ describe("turmas", () => {
     const after = ((await session.get("/api/groups")).json() as GroupsResponse).groups.find((group) => group.id === open.id)!;
     expect(after.enrolled).toBe(open.enrolled + 1);
     expect(after.freeSeats).toBe(open.freeSeats - 1);
-    expect(after.memberNames).toHaveLength(open.enrolled + 1);
+    // Os nomes vêm da lista (já sem o cache velho), com quem acabou de entrar no fim.
+    const newcomer = crm.state.patients.find((item) => item.id === patientId)!.fullName;
+    expect(after.memberNames).toEqual([...open.memberNames!, newcomer]);
     const details = (await session.get(`/api/groups/${open.id}`)).json() as GroupDetailsResponse;
     expect(details.members.some((member) => member.patientId === patientId)).toBe(true);
   });
