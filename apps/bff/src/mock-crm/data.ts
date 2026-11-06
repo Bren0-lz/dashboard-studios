@@ -29,6 +29,8 @@ export interface MockPatient {
   id: string;
   fullName: string;
   phone: string;
+  /** WhatsApp diferente do telefone (um em cada três clientes da demonstração). */
+  whatsapp?: string;
   email?: string;
   cpf: string;
   tags: string[];
@@ -170,7 +172,7 @@ function slots(weekdays: number[], start: string, minutes = 60): GroupWeeklySlot
 
 export function createDemoState(today: string): MockState {
   const iso = (days: number) => `${addDays(today, days)}T13:00:00.000Z`;
-  const fullPermissions = ["groups.enroll", "groups.cancel_enrollment", "plans.purchase", "patients.create", "waitlist.manage", "crm.stage", "crm.contacts_create", "crm.convert"];
+  const fullPermissions = ["patients.view", "groups.enroll", "groups.cancel_enrollment", "plans.purchase", "patients.create", "waitlist.manage", "crm.stage", "crm.contacts_create", "crm.convert"];
   const services: MockService[] = [
     { id: id("51", 1), name: "Pilates", active: true, priceInCents: 9000, durationMinutes: 60, color: "#26705f", businessLine: "studio" },
     { id: id("51", 2), name: "Dançaterapia", active: true, priceInCents: 7000, durationMinutes: 60, color: "#c96f50", businessLine: "studio" },
@@ -195,6 +197,7 @@ export function createDemoState(today: string): MockState {
       id: id("54", n),
       fullName,
       phone: `119${String(80000000 + n * 1373).slice(0, 8)}`,
+      ...(n % 3 === 0 ? { whatsapp: `119${String(70000000 + n * 911).slice(0, 8)}` } : {}),
       email: `${fullName.split(" ")[0]!.toLowerCase().normalize("NFD").replace(/[^a-z]/g, "")}${n}@exemplo.com`,
       cpf: String(10000000000 + n * 97),
       tags: n % 5 === 0 ? ["VIP"] : [],

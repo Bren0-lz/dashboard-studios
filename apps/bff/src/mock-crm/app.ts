@@ -134,12 +134,15 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
   function member(enrollment: MockState["enrollments"][number], group: MockGroup, user: MockUser, position?: number): ExternalGroupMember {
     const person = patient(enrollment.patientId)!;
     const overdue = phase0 && seesFinance(user) && enrollment.status === "active" ? overdueOf(person.id) : undefined;
+    // Como no CRM (PX2): o contato só sai para quem tem `patients.view`; sem ela, só o nome.
+    const contact = can(user, "patients.view")
+      ? { phone: person.phone, ...(person.whatsapp ? { whatsapp: person.whatsapp } : {}), ...(person.email ? { email: person.email } : {}) }
+      : {};
     return {
       enrollmentId: enrollment.id,
       patientId: person.id,
       patientName: person.fullName,
-      phone: person.phone,
-      ...(person.email ? { email: person.email } : {}),
+      ...contact,
       status: enrollment.status,
       ...(position ? { queuePosition: position } : {}),
       startsOn: enrollment.startsOn,
@@ -317,6 +320,7 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
         id: item.id,
         fullName: item.fullName,
         phone: item.phone,
+        ...(item.whatsapp ? { whatsapp: item.whatsapp } : {}),
         ...(item.email ? { email: item.email } : {}),
         tags: item.tags,
         activePlans: state.plans

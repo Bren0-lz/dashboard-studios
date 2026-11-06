@@ -74,12 +74,34 @@ async function loadOverdue(ctx: ScreenContext, groups: readonly ExternalGroupRow
   return { available: true, rows, referenceDate: report.referenceDate };
 }
 
-export async function groupsScreen(ctx: ScreenContext, line: LineFilter): Promise<GroupsResponse> {
+/**
+ * Nomes dos inscritos ativos de cada turma (bolinhas do cartão), lidos do detalhe da turma com o
+ * mesmo cache curto. Uma turma que falhar fica sem as bolinhas, sem derrubar a tela.
+ */
+async function memberNamesOf(ctx: ScreenContext, groups: readonly ExternalGroupRow[]): Promise<Map<string, string[]>> {
+  const entries = await Promise.all(
+    groups.map(async (group) => {
+      try {
+        const details = await ctx.gateway.groupDetails(group.id);
+        return [group.id, details.members.filter((member) => member.status === "active").map((member) => member.patientName)] as const;
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return new Map(entries.filter((entry) => entry !== null));
+}
+
+export async function groupsScreen(ctx: ScreenContext, line: LineFilter, options: { memberNames?: boolean } = {}): Promise<GroupsResponse> {
   const [overview, waitlist, templates] = await Promise.all([ctx.gateway.groups(), ctx.gateway.waitlist(), ctx.gateway.planTemplates()]);
   const overdue = ctx.seeFinance ? await ctx.gateway.overdue() : null;
-  const rows = enrichGroups(overview.groups.filter((group) => matchesLine(group, line)), waitlist).map((row) =>
-    ctx.seeFinance ? row : { ...row, overdueMembers: 0, overdueInCents: 0 },
-  );
+  const ofLine = overview.groups.filter((group) => matchesLine(group, line));
+  const names = options.memberNames ? await memberNamesOf(ctx, ofLine) : null;
+  const rows = enrichGroups(ofLine, waitlist).map((row) => {
+    const view = ctx.seeFinance ? row : { ...row, overdueMembers: 0, overdueInCents: 0 };
+    const memberNames = names?.get(row.id);
+    return memberNames ? { ...view, memberNames } : view;
+  });
   const sum = (pick: (row: (typeof rows)[number]) => number) => rows.reduce((total, row) => total + pick(row), 0);
   const capacity = sum((row) => (row.active ? row.capacity : 0));
   const enrolled = sum((row) => (row.active ? row.enrolled : 0));
@@ -123,12 +145,20 @@ export async function waitlistScreen(ctx: ScreenContext, line: LineFilter): Prom
   };
 }
 
-export async function overdueScreen(ctx: ScreenContext, line: LineFilter): Promise<OverdueResponse> {
+/** `groupId`: só os clientes em atraso inscritos nessa turma (link do cartão da turma). */
+export async function overdueScreen(ctx: ScreenContext, line: LineFilter, groupId?: string): Promise<OverdueResponse> {
   const overview = await ctx.gateway.groups();
-  const { available, rows, referenceDate } = await loadOverdue(ctx, overview.groups, line);
+  // A turma já define a linha: o filtro de linha do cliente (a da 1ª turma dele) ficaria de fora.
+  const loaded = await loadOverdue(ctx, overview.groups, groupId ? "all" : line);
+  const { available, referenceDate } = loaded;
+  const rows = groupId ? loaded.rows.filter((row) => row.groups.some((group) => group.groupId === groupId)) : loaded.rows;
+  const groupName = groupId
+    ? (overview.groups.find((group) => group.id === groupId)?.name ?? loaded.rows.flatMap((row) => row.groups).find((group) => group.groupId === groupId)?.groupName)
+    : undefined;
   return {
     available,
     referenceDate,
+    ...(groupId ? { group: { id: groupId, name: groupName ?? "Turma" } } : {}),
     totalInCents: rows.reduce((sum, row) => sum + row.amountInCents, 0),
     clients: rows.length,
     risk: rows.filter((row) => row.atRisk),

@@ -88,7 +88,9 @@ export interface ExternalGroupMember {
   enrollmentId: string;
   patientId: string;
   patientName: string;
+  /** Contato (`phone`, `whatsapp`, `email`): só para quem tem `patients.view` no CRM. */
   phone?: string;
+  whatsapp?: string;
   email?: string;
   status: GroupEnrollmentStatus;
   queuePosition?: number;

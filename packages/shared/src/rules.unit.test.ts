@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ExternalGroupRow, WaitlistEntry } from "./crm-types.js";
-import { slotLabel } from "./format.js";
+import { initials, memberBubbles, seatsLabel, slotLabel } from "./format.js";
 import {
   buildOpportunities,
   compatibleGroups,
@@ -254,5 +254,27 @@ describe("WhatsApp e formatação", () => {
 describe("slotLabel", () => {
   it("escreve o horário como na tabela do CRM", () => {
     expect(slotLabel({ weekday: 2, startTime: "18:00", endTime: "19:00" })).toBe("Terça · 18:00–19:00");
+  });
+});
+
+describe("cartão da turma", () => {
+  it("tira duas letras do nome, sem as partículas", () => {
+    expect(initials("Clara de Souza")).toBe("CS");
+    expect(initials("  ana  paula   dos santos ")).toBe("AS");
+    expect(initials("Clara")).toBe("CL");
+    expect(initials("Élio Ávila")).toBe("ÉÁ");
+    expect(initials("")).toBe("?");
+  });
+  it("mostra até 6 bolinhas e o resto em +N", () => {
+    const names = ["A A", "B B", "C C", "D D", "E E", "F F", "G G", "H H", "I I"];
+    expect(memberBubbles(names.slice(0, 4))).toEqual({ shown: names.slice(0, 4), extra: 0 });
+    expect(memberBubbles(names.slice(0, 6))).toEqual({ shown: names.slice(0, 6), extra: 0 });
+    expect(memberBubbles(names.slice(0, 7))).toEqual({ shown: names.slice(0, 5), extra: 2 });
+    expect(memberBubbles(names)).toEqual({ shown: names.slice(0, 5), extra: 4 });
+  });
+  it("escreve ocupação e vagas", () => {
+    expect(seatsLabel({ enrolled: 15, capacity: 20, freeSeats: 5 })).toBe("15/20 · 5 vagas");
+    expect(seatsLabel({ enrolled: 7, capacity: 8, freeSeats: 1 })).toBe("7/8 · 1 vaga");
+    expect(seatsLabel({ enrolled: 8, capacity: 8, freeSeats: 0 })).toBe("8/8 · turma cheia");
   });
 });

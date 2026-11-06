@@ -51,3 +51,30 @@ export function firstName(fullName: string): string {
 export function plural(count: number, singular: string, pluralForm: string): string {
   return `${count} ${count === 1 ? singular : pluralForm}`;
 }
+
+const nameParticles = new Set(["da", "das", "de", "do", "dos", "e"]);
+
+/** Duas letras do nome ("Clara de Souza" → "CS"; "Clara" → "CL"), para as bolinhas dos alunos. */
+export function initials(fullName: string): string {
+  const words = fullName.trim().split(/\s+/).filter((word) => word && !nameParticles.has(word.toLowerCase()));
+  if (words.length === 0) return "?";
+  const first = words[0]!;
+  const last = words.length > 1 ? words[words.length - 1]! : "";
+  const letters = last ? `${first[0]}${last[0]}` : first.slice(0, 2);
+  return letters.toLocaleUpperCase("pt-BR");
+}
+
+/**
+ * Bolinhas do cartão da turma: até `max` (6) nomes; acima disso, `max - 1` bolinhas e "+N" com o
+ * resto, para o cartão nunca passar de `max` bolinhas.
+ */
+export function memberBubbles(names: readonly string[], max = 6): { shown: string[]; extra: number } {
+  if (names.length <= max) return { shown: [...names], extra: 0 };
+  return { shown: names.slice(0, max - 1), extra: names.length - (max - 1) };
+}
+
+/** "15/20 · 5 vagas" (ou "· turma cheia"). */
+export function seatsLabel(group: { enrolled: number; capacity: number; freeSeats: number }): string {
+  const free = Math.max(0, group.freeSeats);
+  return `${group.enrolled}/${group.capacity} · ${free > 0 ? plural(free, "vaga", "vagas") : "turma cheia"}`;
+}

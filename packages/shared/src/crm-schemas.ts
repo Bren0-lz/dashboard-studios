@@ -54,6 +54,7 @@ const memberSchema = z.looseObject({
   patientId: z.string(),
   patientName: z.string(),
   phone: z.string().optional(),
+  whatsapp: z.string().optional(),
   email: z.string().optional(),
   status: enrollmentStatus,
   queuePosition: z.number().optional(),

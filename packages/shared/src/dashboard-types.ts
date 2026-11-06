@@ -66,6 +66,8 @@ export interface GroupRow extends ExternalGroupRow {
   overdueInCents: number;
   /** Pessoas da lista de espera geral aguardando o serviço da turma. */
   serviceWaitlist: number;
+  /** Nomes dos inscritos ativos (bolinhas do cartão). Só na tela de turmas; sem eles, o cartão não mostra as bolinhas. */
+  memberNames?: string[];
 }
 
 export interface GroupsResponse {
@@ -119,6 +121,8 @@ export interface OverdueRowView {
 export interface OverdueResponse {
   available: boolean;
   referenceDate: string;
+  /** Lista filtrada pela turma (`?turma=`), aberta pelo cartão da turma. */
+  group?: { id: string; name: string };
   totalInCents: number;
   clients: number;
   risk: OverdueRowView[];
