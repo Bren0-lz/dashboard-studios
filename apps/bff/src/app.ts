@@ -348,7 +348,10 @@ export async function buildApp(config: Config, deps: AppDeps = {}): Promise<Fast
     return { status: "active", message: "Cliente inscrito e retirado da lista de espera." };
   });
 
-  app.get("/api/overdue", async (request) => overdueScreen(ctxOf(request), lineOfQuery(request)));
+  app.get("/api/overdue", async (request) => {
+    const { turma } = z.object({ turma: z.string().trim().max(64).optional() }).parse(request.query);
+    return overdueScreen(ctxOf(request), lineOfQuery(request), turma || undefined);
+  });
 
   app.get("/api/leads", async (request) => {
     const { dias } = z.object({ dias: z.coerce.number().int().min(1).max(90).default(3) }).parse(request.query);

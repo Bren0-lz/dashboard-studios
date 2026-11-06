@@ -74,6 +74,7 @@ async function loadOverdue(ctx: ScreenContext, groups: readonly ExternalGroupRow
   return { available: true, rows, referenceDate: report.referenceDate };
 }
 
+/** Os nomes das bolinhas do cartão (`memberNames`, PX4) vêm na própria lista do CRM: nenhuma leitura por turma. */
 export async function groupsScreen(ctx: ScreenContext, line: LineFilter): Promise<GroupsResponse> {
   const [overview, waitlist, templates] = await Promise.all([ctx.gateway.groups(), ctx.gateway.waitlist(), ctx.gateway.planTemplates()]);
   const overdue = ctx.seeFinance ? await ctx.gateway.overdue() : null;
@@ -123,12 +124,20 @@ export async function waitlistScreen(ctx: ScreenContext, line: LineFilter): Prom
   };
 }
 
-export async function overdueScreen(ctx: ScreenContext, line: LineFilter): Promise<OverdueResponse> {
+/** `groupId`: só os clientes em atraso inscritos nessa turma (link do cartão da turma). */
+export async function overdueScreen(ctx: ScreenContext, line: LineFilter, groupId?: string): Promise<OverdueResponse> {
   const overview = await ctx.gateway.groups();
-  const { available, rows, referenceDate } = await loadOverdue(ctx, overview.groups, line);
+  // A turma já define a linha: o filtro de linha do cliente (a da 1ª turma dele) ficaria de fora.
+  const loaded = await loadOverdue(ctx, overview.groups, groupId ? "all" : line);
+  const { available, referenceDate } = loaded;
+  const rows = groupId ? loaded.rows.filter((row) => row.groups.some((group) => group.groupId === groupId)) : loaded.rows;
+  const groupName = groupId
+    ? (overview.groups.find((group) => group.id === groupId)?.name ?? loaded.rows.flatMap((row) => row.groups).find((group) => group.groupId === groupId)?.groupName)
+    : undefined;
   return {
     available,
     referenceDate,
+    ...(groupId ? { group: { id: groupId, name: groupName ?? "Turma" } } : {}),
     totalInCents: rows.reduce((sum, row) => sum + row.amountInCents, 0),
     clients: rows.length,
     risk: rows.filter((row) => row.atRisk),

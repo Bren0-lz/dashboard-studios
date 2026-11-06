@@ -32,6 +32,7 @@ export const groupRowSchema = z.looseObject({
   businessLine,
   overdueMembers: z.number().optional(),
   overdueInCents: z.number().optional(),
+  memberNames: z.array(z.string()).optional(),
 });
 
 export const groupsOverviewSchema = z.looseObject({
@@ -54,6 +55,7 @@ const memberSchema = z.looseObject({
   patientId: z.string(),
   patientName: z.string(),
   phone: z.string().optional(),
+  whatsapp: z.string().optional(),
   email: z.string().optional(),
   status: enrollmentStatus,
   queuePosition: z.number().optional(),

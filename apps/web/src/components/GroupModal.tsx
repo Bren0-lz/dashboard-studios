@@ -1,9 +1,10 @@
 import { ArrowUpCircle, UserMinus, UserPlus } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   firstName,
   formatMoney,
   formatPhone,
+  initials,
   seatOfferMessage,
   whatsappLink,
   chargeMessage,
@@ -15,10 +16,35 @@ import {
 import { useSession } from "../lib/session";
 import { useAction } from "../lib/useAction";
 import { useRemote } from "../lib/useRemote";
-import { ConfirmDialog, Drawer, EmptyState, ErrorBanner, LinePill, Notice, OccupancyBar, OverdueBadge, Skeleton, WhatsAppButton } from "./ui";
+import { ConfirmDialog, EmptyState, ErrorBanner, LinePill, Modal, Notice, OccupancyBar, OverdueBadge, Skeleton, WhatsAppButton } from "./ui";
 
-/** Gaveta da turma: inscritos (com selo de atraso), espera e ações. Usada na tabela e no calendário. */
-export function GroupDrawer({ groupId, onClose, onEnroll, onChanged }: { groupId: string; onClose: () => void; onEnroll: (group: GroupRow | GroupDetailsResponse) => void; onChanged: () => void }) {
+/** Número para o WhatsApp: o WhatsApp do cadastro e, sem ele, o telefone. Sem `patients.view` não vem nenhum. */
+const whatsappOf = (member: ExternalGroupMember) => member.whatsapp ?? member.phone;
+
+/** Telefone e WhatsApp (quando diferente) do aluno; vazio quando o CRM não manda o contato. */
+function contactLine(member: ExternalGroupMember): string {
+  const parts: string[] = [];
+  if (member.phone) parts.push(formatPhone(member.phone));
+  if (member.whatsapp && member.whatsapp !== member.phone) parts.push(`WhatsApp ${formatPhone(member.whatsapp)}`);
+  return parts.join(" · ");
+}
+
+function MemberName({ member, children }: { member: ExternalGroupMember; children?: ReactNode }) {
+  return (
+    <div className="member-who">
+      <span className="avatar" aria-hidden>
+        {initials(member.patientName)}
+      </span>
+      <strong>
+        {children}
+        {member.patientName}
+      </strong>
+    </div>
+  );
+}
+
+/** Modal da turma: alunos com telefone e WhatsApp, selo de atraso, espera e ações. Usado nos cartões, na tabela e no calendário. */
+export function GroupModal({ groupId, onClose, onEnroll, onChanged }: { groupId: string; onClose: () => void; onEnroll: (group: GroupRow | GroupDetailsResponse) => void; onChanged: () => void }) {
   const { session } = useSession();
   const details = useRemote<GroupDetailsResponse>(`/groups/${groupId}`);
   const [removing, setRemoving] = useState<ExternalGroupMember | null>(null);
@@ -47,33 +73,22 @@ export function GroupDrawer({ groupId, onClose, onEnroll, onChanged }: { groupId
 
   const nextInLine = group?.waitlist[0];
   return (
-    <Drawer
-      title={group?.name ?? "Turma"}
-      subtitle={group ? `${group.schedule} · ${group.professionalName} · ${group.roomName}` : undefined}
-      onClose={onClose}
-      busy={action.busy}
-      footer={
-        group && session.can.enroll ? (
-          <button type="button" className="primary-button" onClick={() => onEnroll(group)}>
-            <UserPlus size={16} aria-hidden /> {group.freeSeats > 0 ? "Inscrever" : "Colocar na espera"}
-          </button>
-        ) : null
-      }
-    >
+    <Modal title={group?.name ?? "Turma"} onClose={onClose} busy={action.busy}>
+      {group ? <p className="panel-context">{`${group.schedule} · ${group.professionalName} · ${group.roomName}`}</p> : null}
       {details.error ? <ErrorBanner message={details.error} onRetry={details.reload} /> : null}
       {!group && details.loading ? <Skeleton rows={5} /> : null}
       {notice ? <Notice tone="success">{notice}</Notice> : null}
       {action.error && !removing ? <p className="form-error">{action.error}</p> : null}
       {group ? (
         <>
-          <div className="drawer-summary">
+          <div className="group-summary">
             <LinePill line={group.businessLine} />
             <OccupancyBar enrolled={group.enrolled} capacity={group.capacity} percent={group.occupancyPercent} />
             <span>{group.freeSeats > 0 ? `${group.freeSeats} ${group.freeSeats === 1 ? "vaga para vender" : "vagas para vender"}` : "Turma cheia"}</span>
             <span>{formatMoney(group.monthlyRevenueInCents)}/mês</span>
           </div>
 
-          <h3 className="section-title">Inscritos ({group.members.length})</h3>
+          <h3 className="section-title">Alunos ({group.members.length})</h3>
           {group.members.length === 0 ? (
             <EmptyState title="Nenhum inscrito ainda" hint="Use “Inscrever” para vender a primeira vaga." />
           ) : (
@@ -81,11 +96,8 @@ export function GroupDrawer({ groupId, onClose, onEnroll, onChanged }: { groupId
               {group.members.map((member) => (
                 <li key={member.enrollmentId} className="member">
                   <div className="member-main">
-                    <strong>{member.patientName}</strong>
-                    <span className="muted">
-                      {formatPhone(member.phone)}
-                      {member.monthlyInCents !== null ? ` · ${formatMoney(member.monthlyInCents)}/mês` : " · sem plano ativo"}
-                    </span>
+                    <MemberName member={member} />
+                    <span className="muted">{[contactLine(member), member.monthlyInCents !== null ? `${formatMoney(member.monthlyInCents)}/mês` : "sem plano ativo"].filter(Boolean).join(" · ")}</span>
                     {member.overdue ? <OverdueBadge overdue={member.overdue} /> : null}
                   </div>
                   <div className="member-actions">
@@ -93,7 +105,7 @@ export function GroupDrawer({ groupId, onClose, onEnroll, onChanged }: { groupId
                       compact
                       label={`WhatsApp de ${member.patientName}`}
                       href={whatsappLink(
-                        member.phone,
+                        whatsappOf(member),
                         member.overdue
                           ? chargeMessage({ patientName: member.patientName, amountInCents: member.overdue.amountInCents, oldestDueDate: member.overdue.oldestDueDate, clinicName: session.clinicName, pixKey: session.pixKey })
                           : `Olá, ${firstName(member.patientName)}! Aqui é do ${session.clinicName}.`,
@@ -118,14 +130,11 @@ export function GroupDrawer({ groupId, onClose, onEnroll, onChanged }: { groupId
               {group.waitlist.map((member) => (
                 <li key={member.enrollmentId} className="member">
                   <div className="member-main">
-                    <strong>
-                      {member.queuePosition ? `${member.queuePosition}º · ` : ""}
-                      {member.patientName}
-                    </strong>
-                    <span className="muted">{formatPhone(member.phone)}</span>
+                    <MemberName member={member}>{member.queuePosition ? `${member.queuePosition}º · ` : ""}</MemberName>
+                    {contactLine(member) ? <span className="muted">{contactLine(member)}</span> : null}
                   </div>
                   <div className="member-actions">
-                    <WhatsAppButton compact label={`Oferecer vaga a ${member.patientName}`} href={whatsappLink(member.phone, seatOfferMessage({ patientName: member.patientName, itemName: group.name, clinicName: session.clinicName, schedule: group.schedule }))} />
+                    <WhatsAppButton compact label={`Oferecer vaga a ${member.patientName}`} href={whatsappLink(whatsappOf(member), seatOfferMessage({ patientName: member.patientName, itemName: group.name, clinicName: session.clinicName, schedule: group.schedule }))} />
                     {session.can.enroll && group.freeSeats > 0 ? (
                       <button type="button" className="secondary-button" onClick={() => promote(member)} disabled={action.busy}>
                         <ArrowUpCircle size={16} aria-hidden /> Promover
@@ -136,6 +145,13 @@ export function GroupDrawer({ groupId, onClose, onEnroll, onChanged }: { groupId
               ))}
             </ul>
           )}
+          {session.can.enroll ? (
+            <div className="modal-actions">
+              <button type="button" className="primary-button" onClick={() => onEnroll(group)} disabled={action.busy}>
+                <UserPlus size={16} aria-hidden /> {group.freeSeats > 0 ? "Inscrever" : "Colocar na espera"}
+              </button>
+            </div>
+          ) : null}
         </>
       ) : null}
       {removing && group ? (
@@ -165,6 +181,6 @@ export function GroupDrawer({ groupId, onClose, onEnroll, onChanged }: { groupId
           }}
         />
       ) : null}
-    </Drawer>
+    </Modal>
   );
 }

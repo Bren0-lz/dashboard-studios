@@ -119,6 +119,8 @@ export interface OverdueRowView {
 export interface OverdueResponse {
   available: boolean;
   referenceDate: string;
+  /** Lista filtrada pela turma (`?turma=`), aberta pelo cartão da turma. */
+  group?: { id: string; name: string };
   totalInCents: number;
   clients: number;
   risk: OverdueRowView[];

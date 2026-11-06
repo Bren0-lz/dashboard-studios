@@ -32,6 +32,8 @@ export interface MockCrmOptions {
   withoutPhase0?: boolean;
   /** Simula o CRM de hoje, cuja API externa ainda não lista as filiais. */
   withoutBranches?: boolean;
+  /** Simula um CRM sem a PX4 (lista de turmas sem `memberNames`). */
+  withoutMemberNames?: boolean;
 }
 
 const PREFIX = "/api/external/v1";
@@ -95,7 +97,9 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
   }
 
   function groupRow(group: MockGroup, user: MockUser): ExternalGroupRow {
-    const members = state.enrollments.filter((item) => item.groupId === group.id && item.status === "active");
+    const members = state.enrollments
+      .filter((item) => item.groupId === group.id && item.status === "active")
+      .sort((a, b) => a.enrolledAt.localeCompare(b.enrolledAt));
     const waiting = state.enrollments.filter((item) => item.groupId === group.id && item.status === "waitlisted");
     const svc = service(group.serviceId)!;
     const revenue = members.reduce((sum, item) => sum + (monthlyOf(item.patientId, group.serviceId) ?? 0), 0);
@@ -125,6 +129,8 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
       monthlyRevenueInCents: revenue,
       potentialMonthlyRevenueInCents: Math.round(revenue + freeSeats * ticket),
       ...(phase0 ? { businessLine: svc.businessLine } : {}),
+      // PX4: nomes dos inscritos ativos, na ordem de inscrição (só nomes, sem `patients.view`).
+      ...(options.withoutMemberNames ? {} : { memberNames: members.map((item) => patient(item.patientId)?.fullName ?? "") }),
       ...(phase0 && seesFinance(user)
         ? { overdueMembers: overdue.length, overdueInCents: overdue.reduce((sum, item) => sum + item.amountInCents, 0) }
         : {}),
@@ -134,12 +140,15 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
   function member(enrollment: MockState["enrollments"][number], group: MockGroup, user: MockUser, position?: number): ExternalGroupMember {
     const person = patient(enrollment.patientId)!;
     const overdue = phase0 && seesFinance(user) && enrollment.status === "active" ? overdueOf(person.id) : undefined;
+    // Como no CRM (PX2): o contato só sai para quem tem `patients.view`; sem ela, só o nome.
+    const contact = can(user, "patients.view")
+      ? { phone: person.phone, ...(person.whatsapp ? { whatsapp: person.whatsapp } : {}), ...(person.email ? { email: person.email } : {}) }
+      : {};
     return {
       enrollmentId: enrollment.id,
       patientId: person.id,
       patientName: person.fullName,
-      phone: person.phone,
-      ...(person.email ? { email: person.email } : {}),
+      ...contact,
       status: enrollment.status,
       ...(position ? { queuePosition: position } : {}),
       startsOn: enrollment.startsOn,
@@ -317,6 +326,7 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
         id: item.id,
         fullName: item.fullName,
         phone: item.phone,
+        ...(item.whatsapp ? { whatsapp: item.whatsapp } : {}),
         ...(item.email ? { email: item.email } : {}),
         tags: item.tags,
         activePlans: state.plans
