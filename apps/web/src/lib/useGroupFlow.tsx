@@ -2,16 +2,16 @@ import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { EnrollResult, GroupDetailsResponse, GroupRow } from "@dash/shared";
 import { EnrollDialog } from "../components/EnrollDialog";
-import { GroupDrawer } from "../components/GroupDrawer";
+import { GroupModal } from "../components/GroupModal";
 import { Notice } from "../components/ui";
 
-/** Gaveta da turma (`?turma=`) + inscrição, compartilhadas entre tabela e calendário. */
+/** Modal da turma (`?turma=`) + inscrição, compartilhadas entre tabela e calendário. */
 export function useGroupFlow(planSale: boolean, onChanged: () => void) {
   const [params, setParams] = useSearchParams();
   const openId = params.get("turma");
   const [enrolling, setEnrolling] = useState<GroupRow | GroupDetailsResponse | null>(null);
   const [message, setMessage] = useState<EnrollResult | null>(null);
-  const [drawerKey, setDrawerKey] = useState(0);
+  const [modalKey, setModalKey] = useState(0);
 
   const setOpen = (id: string | null) =>
     setParams(
@@ -28,7 +28,7 @@ export function useGroupFlow(planSale: boolean, onChanged: () => void) {
     <>
       {message ? <Notice tone={message.status === "active" ? "success" : "warning"}>{message.message}</Notice> : null}
       {openId ? (
-        <GroupDrawer key={`${openId}:${drawerKey}`} groupId={openId} onClose={() => setOpen(null)} onEnroll={setEnrolling} onChanged={onChanged} />
+        <GroupModal key={`${openId}:${modalKey}`} groupId={openId} onClose={() => setOpen(null)} onEnroll={setEnrolling} onChanged={onChanged} />
       ) : null}
       {enrolling ? (
         <EnrollDialog
@@ -38,7 +38,7 @@ export function useGroupFlow(planSale: boolean, onChanged: () => void) {
           onDone={(result) => {
             setEnrolling(null);
             setMessage(result);
-            setDrawerKey((value) => value + 1);
+            setModalKey((value) => value + 1);
             onChanged();
           }}
         />

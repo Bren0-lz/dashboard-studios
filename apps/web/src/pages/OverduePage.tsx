@@ -1,4 +1,5 @@
 import { AlertTriangle, ExternalLink } from "lucide-react";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import {
   chargeMessage,
   formatMoney,
@@ -12,14 +13,19 @@ import {
   type OverdueRowView,
 } from "@dash/shared";
 import { EmptyState, ErrorBanner, Kpi, Notice, PageHeader, Skeleton, WhatsAppButton } from "../components/ui";
-import { useLineFilter, withLine } from "../lib/filters";
+import { globalFilters, useLineFilter, withLine } from "../lib/filters";
 import { useSession } from "../lib/session";
 import { useRemote } from "../lib/useRemote";
 
 export function OverduePage() {
   const [line] = useLineFilter();
   const { session } = useSession();
-  const overdue = useRemote<OverdueResponse>(session.can.seeFinance ? withLine("/overdue", line) : null);
+  const location = useLocation();
+  const [params] = useSearchParams();
+  // `?turma=`: aberta pelo "Pagamentos atrasados" do cartão da turma.
+  const groupId = params.get("turma") ?? "";
+  const path = withLine(groupId ? `/overdue?turma=${encodeURIComponent(groupId)}` : "/overdue", line);
+  const overdue = useRemote<OverdueResponse>(session.can.seeFinance ? path : null);
   const data = overdue.data;
 
   if (!session.can.seeFinance)
@@ -35,6 +41,11 @@ export function OverduePage() {
       <PageHeader title="Quem preciso cobrar?" subtitle={data?.available ? `Posição de ${shortDate(data.referenceDate)}` : undefined} />
       {overdue.error ? <ErrorBanner message={overdue.error} onRetry={overdue.reload} /> : null}
       {!data && overdue.loading ? <Skeleton rows={6} /> : null}
+      {data?.group ? (
+        <Notice>
+          Só os clientes em atraso da turma <strong>{data.group.name}</strong>. <Link to={`/inadimplencia${globalFilters(location.search)}`}>Ver todos os atrasos</Link>
+        </Notice>
+      ) : null}
       {data && !data.available ? <Notice tone="warning">O CRM ainda não informa a inadimplência por cliente. A lista aparece depois da atualização do CRM.</Notice> : null}
       {data?.available ? (
         <>

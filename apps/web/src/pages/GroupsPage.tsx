@@ -12,6 +12,8 @@ import {
   type GroupRow,
   type GroupsResponse,
 } from "@dash/shared";
+import { GroupCard } from "../components/GroupCard";
+import { BranchSelect } from "../components/Layout";
 import { EmptyState, ErrorBanner, Kpi, Notice, PageHeader, Skeleton } from "../components/ui";
 import { useLineFilter, withLine } from "../lib/filters";
 import { useGroupFlow } from "../lib/useGroupFlow";
@@ -28,12 +30,15 @@ interface Filters {
 
 const emptyFilters: Filters = { weekday: "", period: "", professional: "", onlyFree: false, onlyOverdue: false };
 
+type View = "cards" | "table";
+
 export function GroupsPage() {
   const [line] = useLineFilter();
   const { session } = useSession();
   const groups = useRemote<GroupsResponse>(withLine("/groups", line));
   const flow = useGroupFlow(groups.data?.features.planSale ?? false, groups.reload);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
+  const [view, setView] = useState<View>("cards");
   const data = groups.data;
 
   const professionals = useMemo(() => [...new Map((data?.groups ?? []).map((group) => [group.professionalId, group.professionalName])).entries()], [data]);
@@ -60,7 +65,7 @@ export function GroupsPage() {
 
   return (
     <>
-      <PageHeader title="Onde tenho vaga para vender?" subtitle="Turmas ordenadas pela maior receita parada" />
+      <PageHeader title="Onde tenho vaga para vender?" subtitle="Turmas ordenadas pela maior receita parada" actions={<BranchSelect />} />
       {groups.error ? <ErrorBanner message={groups.error} onRetry={groups.reload} /> : null}
       {!data && groups.loading ? <Skeleton rows={8} /> : null}
       {flow.ui}
@@ -111,12 +116,30 @@ export function GroupsPage() {
                   Limpar filtros
                 </button>
               ) : null}
+              <div className="segmented list-toolbar-end" role="group" aria-label="Exibição">
+                {(
+                  [
+                    ["cards", "Cartões"],
+                    ["table", "Tabela"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button key={value} type="button" className={view === value ? "active" : ""} aria-pressed={view === value} onClick={() => setView(value)}>
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
             {rows.length === 0 ? (
               <EmptyState
                 title={filtered ? "Nenhuma turma com esses filtros" : "Nenhuma turma ativa"}
                 hint={filtered ? "Limpe os filtros para ver todas as turmas." : "Cadastre as turmas no CRM para vender as vagas por aqui."}
               />
+            ) : view === "cards" ? (
+              <div className="group-cards">
+                {rows.map((group) => (
+                  <GroupCard key={group.id} group={group} showOverdue={showOverdue} canEnroll={canEnroll} onOpen={() => flow.open(group.id)} onEnroll={() => flow.enroll(group)} />
+                ))}
+              </div>
             ) : (
               <div className="table-wrap">
                 <table className="data-table groups-table" aria-label="Turmas">
@@ -186,7 +209,7 @@ export function GroupsPage() {
                 </table>
               </div>
             )}
-            {rows.length > 0 ? (
+            {rows.length > 0 && view === "table" ? (
               <p className="groups-table-note muted">
                 Valores por mês. O faturamento atual soma, para cada matriculado, o valor por sessão do plano ativo que cobre o serviço da turma multiplicado pelos encontros do mês
                 (horários semanais × 4). O potencial acrescenta as vagas disponíveis pelo valor médio dos matriculados com plano (sem nenhum, pelo preço avulso do serviço).

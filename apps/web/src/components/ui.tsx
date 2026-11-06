@@ -102,29 +102,6 @@ export function WhatsAppButton({ href, label = "WhatsApp", compact = false }: { 
   );
 }
 
-/** Gaveta lateral. Esc fecha (exceto durante o salvamento); o fundo não fecha. */
-export function Drawer({ title, subtitle, onClose, busy = false, children, footer }: { title: string; subtitle?: ReactNode; onClose: () => void; busy?: boolean; children: ReactNode; footer?: ReactNode }) {
-  useEscape(onClose, busy);
-  return (
-    <div className="overlay">
-      <div className="overlay-backdrop" />
-      <aside className="drawer" role="dialog" aria-modal="true" aria-label={title}>
-        <header className="drawer-head">
-          <div>
-            <h2>{title}</h2>
-            {subtitle ? <div className="panel-context">{subtitle}</div> : null}
-          </div>
-          <button type="button" className="icon-button" onClick={onClose} disabled={busy} aria-label="Fechar">
-            <X size={18} />
-          </button>
-        </header>
-        <div className="drawer-body">{children}</div>
-        {footer ? <footer className="drawer-foot">{footer}</footer> : null}
-      </aside>
-    </div>
-  );
-}
-
 export function Modal({ title, onClose, busy = false, children, size = "md" }: { title: string; onClose: () => void; busy?: boolean; children: ReactNode; size?: "sm" | "md" }) {
   useEscape(onClose, busy);
   const ref = useRef<HTMLDivElement>(null);

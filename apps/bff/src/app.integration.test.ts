@@ -117,6 +117,65 @@ describe("turmas", () => {
     const after = (await session.get("/api/groups")).json() as GroupsResponse;
     expect(after.groups.find((group) => group.id === open.id)!.enrolled).toBe(open.enrolled + 1);
   });
+
+  it("manda os nomes dos inscritos ativos para as bolinhas do cartão", async () => {
+    const { login } = await createHarness();
+    const session = await login();
+    const groups = (await session.get("/api/groups")).json() as GroupsResponse;
+    const full = groups.groups.find((group) => group.name === "Pilates Ter/Qui 18h")!;
+    const details = (await session.get(`/api/groups/${full.id}`)).json() as GroupDetailsResponse;
+    expect(full.memberNames).toEqual(details.members.filter((member) => member.status === "active").map((member) => member.patientName));
+    expect(full.memberNames).toHaveLength(full.enrolled);
+    expect(groups.groups.every((group) => group.memberNames?.length === group.enrolled)).toBe(true);
+  });
+
+  it("mostra o contato dos alunos (telefone e WhatsApp) só a quem tem patients.view", async () => {
+    const { login } = await createHarness();
+    const admin = await login();
+    const groups = (await admin.get("/api/groups")).json() as GroupsResponse;
+    const id = groups.groups.find((group) => group.name === "Dança Ter/Qui 19h")!.id;
+    const seen = (await admin.get(`/api/groups/${id}`)).json() as GroupDetailsResponse;
+    expect(seen.members.every((member) => member.phone)).toBe(true);
+    expect(seen.members.some((member) => member.whatsapp && member.whatsapp !== member.phone)).toBe(true);
+
+    const sales = await login("vendas@aryana.com");
+    const hidden = (await sales.get(`/api/groups/${id}`)).json() as GroupDetailsResponse;
+    expect(hidden.members.map((member) => member.patientName)).toEqual(seen.members.map((member) => member.patientName));
+    for (const member of [...hidden.members, ...hidden.waitlist]) {
+      expect(member).not.toHaveProperty("phone");
+      expect(member).not.toHaveProperty("whatsapp");
+      expect(member).not.toHaveProperty("email");
+    }
+  });
+
+  it("depois de inscrever, o cartão e o detalhe da turma saem atualizados apesar do cache de 45 s", async () => {
+    const { login } = await createHarness();
+    const session = await login();
+    const before = (await session.get("/api/groups")).json() as GroupsResponse;
+    const open = before.groups.find((group) => group.name === "Pilates Sáb 9h")!;
+    await session.get(`/api/groups/${open.id}`);
+    const patientId = "00000000-0000-4000-8000-540000000047";
+    const enrolled = await session.send("POST", `/api/groups/${open.id}/enroll`, { patientId });
+    expect(enrolled.json()).toMatchObject({ status: "active" });
+    const after = ((await session.get("/api/groups")).json() as GroupsResponse).groups.find((group) => group.id === open.id)!;
+    expect(after.enrolled).toBe(open.enrolled + 1);
+    expect(after.freeSeats).toBe(open.freeSeats - 1);
+    expect(after.memberNames).toHaveLength(open.enrolled + 1);
+    const details = (await session.get(`/api/groups/${open.id}`)).json() as GroupDetailsResponse;
+    expect(details.members.some((member) => member.patientId === patientId)).toBe(true);
+  });
+
+  it("na turma cheia, inscrever põe na espera com a posição vinda do CRM", async () => {
+    const { login } = await createHarness();
+    const session = await login();
+    const groups = (await session.get("/api/groups")).json() as GroupsResponse;
+    const full = groups.groups.find((group) => group.name === "Pilates Seg/Qua 19h")!;
+    const result = await session.send("POST", `/api/groups/${full.id}/enroll`, { patientId: "00000000-0000-4000-8000-540000000047" });
+    expect(result.json()).toEqual({ status: "waitlisted", queuePosition: 3, message: "Turma cheia: o cliente entrou na lista de espera (posição 3)." });
+    const after = ((await session.get("/api/groups")).json() as GroupsResponse).groups.find((group) => group.id === full.id)!;
+    expect(after.waitlistCount).toBe(full.waitlistCount + 1);
+    expect(after.enrolled).toBe(full.enrolled);
+  });
 });
 
 describe("lista de espera", () => {
@@ -151,6 +210,29 @@ describe("inadimplência", () => {
     expect(overdue.risk.every((row) => row.atRisk)).toBe(true);
     const counted = overdue.risk.length + overdue.bands.reduce((sum, band) => sum + band.rows.length, 0);
     expect(counted).toBe(overdue.clients);
+  });
+
+  it("filtra pela turma do cartão (?turma=) com a mesma contagem do cartão", async () => {
+    const { login } = await createHarness();
+    const session = await login();
+    const groups = (await session.get("/api/groups?linha=studio")).json() as GroupsResponse;
+    const group = groups.groups.find((item) => item.name === "Pilates Ter/Qui 18h")!;
+    expect(group.overdueMembers).toBeGreaterThan(0);
+    const overdue = (await session.get(`/api/overdue?linha=aesthetics&turma=${group.id}`)).json() as OverdueResponse;
+    expect(overdue.group).toEqual({ id: group.id, name: "Pilates Ter/Qui 18h" });
+    expect(overdue.clients).toBe(group.overdueMembers);
+    const rows = [...overdue.risk, ...overdue.bands.flatMap((band) => band.rows)];
+    expect(rows.every((row) => row.groups.some((item) => item.groupId === group.id))).toBe(true);
+    expect(overdue.totalInCents).toBe(group.overdueInCents);
+  });
+
+  it("sem acesso ao financeiro, os cartões não trazem os atrasos", async () => {
+    const { login } = await createHarness();
+    const session = await login("vendas@aryana.com");
+    const groups = (await session.get("/api/groups")).json() as GroupsResponse;
+    expect(groups.features.overdue).toBe(false);
+    expect(groups.groups.every((group) => group.overdueMembers === 0 && group.overdueInCents === 0)).toBe(true);
+    expect((await session.get("/api/overdue")).json()).toMatchObject({ available: false, clients: 0 });
   });
 });
 
