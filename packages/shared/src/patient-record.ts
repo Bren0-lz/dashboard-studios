@@ -294,7 +294,7 @@ export const patientPaymentsSchema = z.looseObject({
 // --- Filtros do histórico (BFF e tela) ---------------------------------------------------
 
 /** Lista na query: `a,b` ou o parâmetro repetido (até 20 valores). */
-function queryList<T extends z.ZodType<string>>(item: T) {
+function queryList<T extends z.ZodType<string, string>>(item: T) {
   return z
     .union([z.string(), z.array(z.string())])
     .optional()

@@ -15,6 +15,7 @@ import {
 } from "@dash/shared";
 import { GroupCard } from "../components/GroupCard";
 import { BranchSelect } from "../components/Layout";
+import { canOpenPatient, PatientModal, type PatientRef } from "../components/PatientModal";
 import { EmptyState, ErrorBanner, Kpi, MemberOverdueMark, Notice, PageHeader, Skeleton } from "../components/ui";
 import { usePanelFilter, withFilter } from "../lib/filters";
 import { useGroupFlow } from "../lib/useGroupFlow";
@@ -65,6 +66,9 @@ export function GroupsPage() {
   // Turmas com a lista de matriculados aberta logo abaixo da linha.
   const [expanded, setExpanded] = useState<string[]>([]);
   const toggleMembers = (groupId: string) => setExpanded((current) => (current.includes(groupId) ? current.filter((item) => item !== groupId) : [...current, groupId]));
+  // Ficha do cliente (PT8), aberta pelo nome na lista de matriculados; fechar volta à mesma tabela e filtros.
+  const [patient, setPatient] = useState<PatientRef | null>(null);
+  const selectMember = canOpenPatient(session.can) ? (member: ExternalGroupMember) => setPatient({ id: member.patientId, name: member.patientName }) : undefined;
 
   return (
     <>
@@ -72,6 +76,7 @@ export function GroupsPage() {
       {groups.error ? <ErrorBanner message={groups.error} onRetry={groups.reload} /> : null}
       {!data && groups.loading ? <Skeleton rows={8} /> : null}
       {flow.ui}
+      {patient ? <PatientModal patient={patient} onClose={() => setPatient(null)} /> : null}
       {data ? (
         <>
           <section className="kpi-grid kpi-grid-compact">
@@ -193,6 +198,7 @@ export function GroupsPage() {
                         onToggle={() => toggleMembers(group.id)}
                         onOpen={() => flow.open(group.id)}
                         onEnroll={() => flow.enroll(group)}
+                        onSelectMember={selectMember}
                       />
                     ))}
                   </tbody>
@@ -248,6 +254,7 @@ function GroupTableRow({
   onToggle,
   onOpen,
   onEnroll,
+  onSelectMember,
 }: {
   group: GroupRow;
   showOverdue: boolean;
@@ -257,6 +264,7 @@ function GroupTableRow({
   onToggle: () => void;
   onOpen: () => void;
   onEnroll: () => void;
+  onSelectMember?: ((member: ExternalGroupMember) => void) | undefined;
 }) {
   const membersId = `turma-${group.id}-matriculados`;
   return (
@@ -316,7 +324,7 @@ function GroupTableRow({
       {open ? (
         <tr id={membersId} className="members-row">
           <td colSpan={columns}>
-            <GroupMembers group={group} showOverdue={showOverdue} />
+            <GroupMembers group={group} showOverdue={showOverdue} onSelect={onSelectMember} />
           </td>
         </tr>
       ) : null}
@@ -326,10 +334,10 @@ function GroupTableRow({
 
 /**
  * Matriculados da turma, carregados só quando a linha é aberta. Com `finance.view`, quem tem parcela
- * vencida aparece marcado como inadimplente. `onSelect` deixa cada nome pronto para virar botão (PT8:
- * ficha do cliente); sem ele, o nome é só texto.
+ * vencida aparece marcado como inadimplente. Com `onSelect` (quem tem `patients.view` ou `finance.view`),
+ * cada nome é um botão que abre a ficha do cliente (PT8); sem ele, o nome é só texto.
  */
-function GroupMembers({ group, showOverdue, onSelect }: { group: Pick<GroupRow, "id" | "name">; showOverdue: boolean; onSelect?: (member: ExternalGroupMember) => void }) {
+function GroupMembers({ group, showOverdue, onSelect }: { group: Pick<GroupRow, "id" | "name">; showOverdue: boolean; onSelect?: ((member: ExternalGroupMember) => void) | undefined }) {
   const details = useRemote<GroupDetailsResponse>(`/groups/${group.id}`);
   if (details.error && !details.data) return <ErrorBanner message={details.error} onRetry={details.reload} />;
   if (!details.data) return <Skeleton rows={1} />;
@@ -340,7 +348,7 @@ function GroupMembers({ group, showOverdue, onSelect }: { group: Pick<GroupRow, 
       {members.map((member) => (
         <li key={member.enrollmentId} className={showOverdue && member.overdue ? "is-overdue" : undefined}>
           {onSelect ? (
-            <button type="button" className="row-title" onClick={() => onSelect(member)}>
+            <button type="button" className="row-title" onClick={() => onSelect(member)} title="Ver ficha do cliente">
               {member.patientName}
             </button>
           ) : (

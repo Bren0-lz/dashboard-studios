@@ -16,6 +16,7 @@ import {
 import { useSession } from "../lib/session";
 import { useAction } from "../lib/useAction";
 import { useRemote } from "../lib/useRemote";
+import { canOpenPatient, PatientModal, type PatientRef } from "./PatientModal";
 import { ConfirmDialog, EmptyState, ErrorBanner, LinePill, MemberOverdueMark, Modal, Notice, OccupancyBar, Skeleton, WhatsAppButton } from "./ui";
 
 /** Número para o WhatsApp: o WhatsApp do cadastro e, sem ele, o telefone. Sem `patients.view` não vem nenhum. */
@@ -29,7 +30,8 @@ function contactLine(member: ExternalGroupMember): string {
   return parts.join(" · ");
 }
 
-function MemberName({ member, children }: { member: ExternalGroupMember; children?: ReactNode }) {
+/** Nome do aluno; com `onSelect` (PT8), o nome é um botão que abre a ficha do cliente. */
+function MemberName({ member, children, onSelect }: { member: ExternalGroupMember; children?: ReactNode; onSelect?: (() => void) | undefined }) {
   return (
     <div className="member-who">
       <span className="avatar" aria-hidden>
@@ -37,7 +39,13 @@ function MemberName({ member, children }: { member: ExternalGroupMember; childre
       </span>
       <strong>
         {children}
-        {member.patientName}
+        {onSelect ? (
+          <button type="button" className="row-title" onClick={onSelect} title="Ver ficha do cliente">
+            {member.patientName}
+          </button>
+        ) : (
+          member.patientName
+        )}
       </strong>
     </div>
   );
@@ -49,6 +57,9 @@ export function GroupModal({ groupId, onClose, onEnroll, onChanged }: { groupId:
   const details = useRemote<GroupDetailsResponse>(`/groups/${groupId}`);
   const [removing, setRemoving] = useState<ExternalGroupMember | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Ficha do cliente (PT8) num modal sobre a turma; fechar volta para a lista de alunos.
+  const [patient, setPatient] = useState<PatientRef | null>(null);
+  const canOpen = canOpenPatient(session.can);
   const action = useAction();
   const group = details.data;
 
@@ -96,7 +107,7 @@ export function GroupModal({ groupId, onClose, onEnroll, onChanged }: { groupId:
               {group.members.map((member) => (
                 <li key={member.enrollmentId} className="member">
                   <div className="member-main">
-                    <MemberName member={member} />
+                    <MemberName member={member} onSelect={canOpen ? () => setPatient({ id: member.patientId, name: member.patientName }) : undefined} />
                     <span className="muted">{[contactLine(member), member.monthlyInCents !== null ? `${formatMoney(member.monthlyInCents)}/mês` : "sem plano ativo"].filter(Boolean).join(" · ")}</span>
                     {member.overdue && session.can.seeFinance ? <MemberOverdueMark overdue={member.overdue} /> : null}
                   </div>
@@ -154,6 +165,7 @@ export function GroupModal({ groupId, onClose, onEnroll, onChanged }: { groupId:
           ) : null}
         </>
       ) : null}
+      {patient ? <PatientModal patient={patient} onClose={() => setPatient(null)} /> : null}
       {removing && group ? (
         <ConfirmDialog
           title="Remover da turma"

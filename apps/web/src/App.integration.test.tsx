@@ -267,8 +267,8 @@ describe("tabela de turmas (PT7)", () => {
     }
     const upToDate = within(members).getAllByRole("listitem").filter((item) => !item.classList.contains("is-overdue"));
     for (const item of upToDate) expect(item).not.toHaveTextContent("Inadimplente");
-    // Os nomes ainda não são botões (a ficha do cliente é a PT8).
-    expect(within(members).queryByRole("button")).not.toBeInTheDocument();
+    // PT8: cada nome é um botão que abre a ficha do cliente.
+    expect(within(members).getAllByRole("button")).toHaveLength(within(members).getAllByRole("listitem").length);
 
     await user.click(within(row).getByRole("button", { name: "Pilates Ter/Qui 18h" }));
     const modal = await screen.findByRole("dialog", { name: "Pilates Ter/Qui 18h" });

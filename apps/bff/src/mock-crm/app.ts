@@ -5,6 +5,7 @@ import {
   monthEnd,
   monthStart,
   overdueBand,
+  patientPaymentsQuerySchema,
   previousMonth,
   todayInClinic,
   weekdayShort,
@@ -12,12 +13,16 @@ import {
   type ExternalGroupMember,
   type ExternalGroupRow,
   type ExternalOverdueRow,
+  type ExternalPatientDetails,
+  type ExternalPatientPayment,
+  type ExternalPatientPayments,
+  type ExternalPatientRecord,
   type LeadInsights,
   type MemberOverdue,
   type SaleMovement,
   type SalesReportPeriod,
 } from "@dash/shared";
-import { createDemoState, type MockGroup, type MockState, type MockUser } from "./data.js";
+import { createDemoState, type MockGroup, type MockReceivable, type MockState, type MockUser } from "./data.js";
 
 /**
  * CRM simulado: a API externa `/api/external/v1` com dados de demonstração, já com o que a
@@ -39,6 +44,8 @@ export interface MockCrmOptions {
    * fase 0) e inadimplência sem `services`/`productLines` (com a linha da 1ª turma do cliente).
    */
   withoutLineDetails?: boolean;
+  /** Simula um CRM sem a PX6 (sem a ficha do cliente nem o histórico de pagamentos: as rotas dão 404). */
+  withoutPatientRecord?: boolean;
 }
 
 const PREFIX = "/api/external/v1";
@@ -66,7 +73,7 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
     return typeof header === "string" && header.trim() && header.trim() !== "all" ? header.trim() : undefined;
   };
   const can = (user: MockUser, permission: string) => user.role === "admin" || user.permissions.includes(permission);
-  const seesFinance = (user: MockUser) => user.role === "admin" || user.modules.includes("finance");
+  const seesFinance = (user: MockUser) => user.role === "admin" || user.modules.includes("finance") || user.permissions.includes("finance.view");
 
   app.addHook("onRequest", async (request, reply) => {
     if (!request.url.startsWith(PREFIX)) return fail(reply, 404, "NOT_FOUND", "Rota não encontrada.");
@@ -366,6 +373,148 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
     state.patients.push(created);
     return reply.status(201).send(created);
   });
+
+  // --- Ficha do cliente e histórico de pagamentos (PX6) -----------------------------------
+  if (phase0 && !options.withoutPatientRecord) {
+    const patientNotFound = (reply: FastifyReply) => fail(reply, 404, "PATIENT_NOT_FOUND", "Cliente não encontrado.");
+
+    app.get(`${PREFIX}/patients/:id`, async (request, reply) => {
+      const user = userOf(request);
+      const index = state.patients.findIndex((item) => item.id === (request.params as { id: string }).id);
+      const person = state.patients[index];
+      if (!person) return patientNotFound(reply);
+      if (!can(user, "patients.view")) return { id: person.id, fullName: person.fullName } satisfies ExternalPatientDetails;
+      const activePlans = state.plans
+        .filter((plan) => plan.patientId === person.id && plan.status === "active" && plan.validFrom <= today && (!plan.validUntil || plan.validUntil >= today))
+        .map((plan) => ({ id: plan.id, name: plan.name, validFrom: plan.validFrom, ...(plan.validUntil ? { validUntil: plan.validUntil } : {}) }));
+      const groups = state.enrollments
+        .filter((item) => item.patientId === person.id && item.status !== "cancelled")
+        .map((item) => {
+          const group = state.groups.find((entry) => entry.id === item.groupId);
+          return { groupId: item.groupId, groupName: group?.name ?? "", ...(group ? { branchId: group.branchId } : {}), status: item.status };
+        });
+      const branchIds = new Set(groups.flatMap((item) => (item.branchId ? [item.branchId] : [])));
+      // Etiqueta automática "Pagamento atrasado" só para quem vê o financeiro, como no CRM.
+      const tags = [...person.tags, ...(seesFinance(user) && overdueOf(person.id) ? ["Pagamento atrasado"] : [])];
+      const record: ExternalPatientRecord = {
+        recordNumber: String(index + 1).padStart(6, "0"),
+        status: person.status ?? "active",
+        phone: person.phone,
+        ...(person.whatsapp ? { whatsapp: person.whatsapp } : {}),
+        ...(person.email ? { email: person.email } : {}),
+        cpf: person.cpf,
+        ...person.profile,
+        tags,
+        branches: state.branches.filter((branch) => branchIds.has(branch.id)).map(({ id, name }) => ({ id, name })),
+        activePlans,
+        groups,
+        createdAt: person.createdAt ?? "2025-01-15T12:00:00.000Z",
+      };
+      return { id: person.id, fullName: person.fullName, record } satisfies ExternalPatientDetails;
+    });
+
+    /** Cobranças do cliente no formato da API externa (mesmas regras de `patient-payments.ts` do CRM). */
+    const paymentRows = (patientId: string): ExternalPatientPayment[] => {
+      const own = state.receivables.filter((item) => item.patientId === patientId);
+      const byId = new Map(own.map((item) => [item.id, item]));
+      const balanceFor = new Map(own.flatMap((item) => (item.balanceOf ? [[item.balanceOf, item.id] as const] : [])));
+      const originOf = (receivable: MockReceivable): Pick<ExternalPatientPayment, "origin" | "sourceId" | "services" | "productLines"> => {
+        const parent = receivable.balanceOf ? byId.get(receivable.balanceOf) : undefined;
+        if (parent) return originOf(parent);
+        const plan = receivable.planId ? state.plans.find((item) => item.id === receivable.planId) : undefined;
+        if (plan) return { origin: "plan", sourceId: plan.id, services: [plan.serviceId, ...(plan.extraServiceIds ?? [])].map(serviceRef), productLines: [] };
+        const productLines = [...new Set(receivable.productLines ?? [])];
+        const origin = receivable.origin ?? (productLines.length ? "sale" : "manual");
+        return {
+          origin,
+          ...(receivable.sourceId ? { sourceId: receivable.sourceId } : {}),
+          services: (receivable.serviceIds ?? []).map(serviceRef),
+          productLines: origin === "manual" ? [] : productLines,
+        };
+      };
+      const owesBalance = (id: string | undefined, seen = new Set<string>()): boolean => {
+        const balance = id ? byId.get(id) : undefined;
+        if (!balance || seen.has(balance.id)) return false;
+        seen.add(balance.id);
+        if (balance.status === "open") return true;
+        return balance.status === "paid" && owesBalance(balanceFor.get(balance.id), seen);
+      };
+      const installmentOf = (receivable: MockReceivable) => {
+        if (!receivable.planId) return { installmentNumber: 1, installmentCount: 1 };
+        const siblings = own.filter((item) => item.planId === receivable.planId).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+        return { installmentNumber: siblings.indexOf(receivable) + 1, installmentCount: siblings.length };
+      };
+      return own.map((receivable) => {
+        const paid = receivable.status === "paid";
+        const events =
+          receivable.events ??
+          (paid ? [{ id: `${receivable.id}-baixa`, kind: "payment" as const, occurredAt: `${receivable.paidAt ?? receivable.dueDate}T13:00:00.000Z`, amountInCents: receivable.amountInCents, paymentMethod: receivable.paymentMethod ?? "pix", ...(receivable.discountInCents ? { discountInCents: receivable.discountInCents } : {}) }] : []);
+        const event = ({ kind: _kind, ...rest }: (typeof events)[number]) => rest;
+        const payments = events.filter((item) => item.kind === "payment");
+        const reversals = events.filter((item) => item.kind === "reversal");
+        const balance = paid ? balanceFor.get(receivable.id) : undefined;
+        const lastPayment = payments.at(-1);
+        const plan = receivable.planId ? state.plans.find((item) => item.id === receivable.planId) : undefined;
+        return {
+          id: receivable.id,
+          ...originOf(receivable),
+          description: receivable.description ?? plan?.name ?? "Lançamento manual",
+          ...installmentOf(receivable),
+          dueDate: receivable.dueDate,
+          amountInCents: receivable.amountInCents,
+          discountInCents: (receivable.customerDiscountInCents ?? 0) + (paid ? (receivable.discountInCents ?? 0) : 0),
+          status:
+            receivable.status === "cancelled" ? "cancelled" : paid ? (owesBalance(balance) ? "partially_paid" : "paid") : receivable.dueDate < today ? "overdue" : "open",
+          reversed: reversals.length > 0,
+          paidInCents: payments.reduce((sum, item) => sum + item.amountInCents, 0) - reversals.reduce((sum, item) => sum + item.amountInCents, 0),
+          ...(paid && lastPayment ? { paidAt: lastPayment.occurredAt, ...(lastPayment.paymentMethod ? { paymentMethod: lastPayment.paymentMethod } : {}) } : {}),
+          ...(balance ? { balanceReceivableId: balance } : {}),
+          ...(receivable.balanceOf && byId.has(receivable.balanceOf) ? { balanceOfReceivableId: receivable.balanceOf } : {}),
+          payments: payments.map(event),
+          reversals: reversals.map(event),
+        } satisfies ExternalPatientPayment;
+      });
+    };
+
+    app.get(`${PREFIX}/patients/:id/payments`, async (request, reply) => {
+      const user = userOf(request);
+      if (!seesFinance(user)) return fail(reply, 403, "FINANCE_ACCESS_DENIED", "Você não tem acesso ao Financeiro.");
+      const parsed = patientPaymentsQuerySchema.safeParse(request.query);
+      if (!parsed.success) return fail(reply, 400, "VALIDATION_ERROR", parsed.error.issues[0]?.message ?? "Filtro inválido.");
+      const query = parsed.data;
+      const person = patient((request.params as { id: string }).id);
+      if (!person) return patientNotFound(reply);
+      const inPeriod = (date: string) => (!query.from || date >= query.from) && (!query.to || date <= query.to);
+      const rows = paymentRows(person.id)
+        .filter((row) => !query.status.length || query.status.some((item) => (item === "reversed" ? row.reversed : item === row.status)))
+        .filter((row) => !query.origin.length || query.origin.includes(row.origin))
+        .filter((row) => !query.serviceId.length || row.services.some((item) => query.serviceId.includes(item.id)))
+        .filter((row) => {
+          if (!query.businessLine.length) return true;
+          const lines = [...row.services.map((item) => item.businessLine ?? "other"), ...row.productLines.map((item) => item ?? "other")];
+          return query.businessLine.some((item) => lines.includes(item));
+        })
+        .filter((row) => {
+          if (!query.from && !query.to) return true;
+          return query.dateField === "due" ? inPeriod(row.dueDate) : row.payments.some((item) => inPeriod(item.occurredAt.slice(0, 10)));
+        })
+        .sort((a, b) => b.dueDate.localeCompare(a.dueDate) || b.installmentNumber - a.installmentNumber || a.id.localeCompare(b.id));
+      const sum = (pick: (row: ExternalPatientPayment) => number) => rows.reduce((total, row) => total + pick(row), 0);
+      return {
+        patientId: person.id,
+        patientName: person.fullName,
+        referenceDate: today,
+        totals: {
+          count: rows.length,
+          amountInCents: sum((row) => row.amountInCents),
+          paidInCents: sum((row) => row.paidInCents),
+          openInCents: sum((row) => (row.status === "open" || row.status === "overdue" ? row.amountInCents : 0)),
+          overdueInCents: sum((row) => (row.status === "overdue" ? row.amountInCents : 0)),
+        },
+        payments: rows,
+      } satisfies ExternalPatientPayments;
+    });
+  }
 
   // Como no CRM (PX3): só os serviços ativos, com a linha (`null` = sem classificação).
   app.get(`${PREFIX}/services`, async () =>

@@ -109,7 +109,7 @@ export function WhatsAppButton({ href, label = "WhatsApp", compact = false }: { 
   );
 }
 
-export function Modal({ title, onClose, busy = false, children, size = "md" }: { title: string; onClose: () => void; busy?: boolean; children: ReactNode; size?: "sm" | "md" }) {
+export function Modal({ title, onClose, busy = false, children, size = "md" }: { title: string; onClose: () => void; busy?: boolean; children: ReactNode; size?: "sm" | "md" | "lg" }) {
   useEscape(onClose, busy);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
