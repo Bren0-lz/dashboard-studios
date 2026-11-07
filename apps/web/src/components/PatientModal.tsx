@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { CalendarDays, CreditCard, Layers, MapPin, Phone, Tag, User, UserRound } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import {
   formatMoney,
   formatPhone,
   genderLabels,
+  initials,
   lineKeyLabels,
   lineKeys,
   paymentMethodLabel,
@@ -59,14 +61,26 @@ export function PatientModal({ patient, onClose }: { patient: PatientRef; onClos
   const unavailable = data?.available === false;
   const record = data?.available ? data.record : undefined;
   return (
-    <Modal title={patient.name} onClose={onClose} size="lg">
+    <Modal
+      title={patient.name}
+      subtitle={record ? [record.recordNumber, record.status === "active" ? "Cliente ativo" : "Cliente inativo"].filter(Boolean).join(" · ") : undefined}
+      leading={
+        <span className="avatar avatar-lg" aria-hidden>
+          {initials(patient.name)}
+        </span>
+      }
+      onClose={onClose}
+      size="lg"
+    >
       {details.error ? <ErrorBanner message={details.error} onRetry={details.reload} /> : null}
       {unavailable ? (
         <Notice tone="warning">{crmWithoutRecord}</Notice>
       ) : (
         <>
           <section className="patient-section" aria-label="Dados do cliente">
-            <h3 className="section-title">Dados do cliente</h3>
+            <h3 className="section-title">
+              <UserRound size={16} aria-hidden /> Dados do cliente
+            </h3>
             {!session.can.seePatients ? (
               <Notice>Sem acesso a Clientes no CRM: os dados cadastrais e de contato ficam escondidos.</Notice>
             ) : record ? (
@@ -78,7 +92,9 @@ export function PatientModal({ patient, onClose }: { patient: PatientRef; onClos
             ) : null}
           </section>
           <section className="patient-section" aria-label="Histórico de pagamentos">
-            <h3 className="section-title">Histórico de pagamentos</h3>
+            <h3 className="section-title">
+              <CreditCard size={16} aria-hidden /> Histórico de pagamentos
+            </h3>
             {session.can.seeFinance ? (
               <PaymentHistory patientId={patient.id} />
             ) : (
@@ -93,41 +109,16 @@ export function PatientModal({ patient, onClose }: { patient: PatientRef; onClos
 
 type RecordField = keyof typeof patientRecordLabels;
 
-const recordFields: RecordField[] = [
-  "recordNumber",
-  "status",
-  "inactiveAt",
-  "phone",
-  "whatsapp",
-  "email",
-  "cpf",
-  "birthDate",
-  "emergencyContactName",
-  "emergencyContactPhone",
-  "nickname",
-  "gender",
-  "occupation",
-  "residenceType",
-  "address",
-  "addressNumber",
-  "complement",
-  "buildingName",
-  "block",
-  "floor",
-  "unit",
-  "referencePoint",
-  "neighborhood",
-  "city",
-  "state",
-  "postalCode",
-  "guardianName",
-  "guardianPhone",
-  "source",
-  "level",
-  "clientSince",
-  "imageConsent",
-  "interests",
-  "discount",
+/** Campos da ficha agrupados em blocos só para leitura; blocos sem nenhum valor somem. */
+const recordGroups: { title: string; icon: ReactNode; fields: RecordField[] }[] = [
+  { title: "Contato", icon: <Phone size={14} />, fields: ["phone", "whatsapp", "email", "emergencyContactName", "emergencyContactPhone", "guardianName", "guardianPhone"] },
+  { title: "Pessoal", icon: <User size={14} />, fields: ["birthDate", "cpf", "nickname", "gender", "occupation"] },
+  {
+    title: "Endereço",
+    icon: <MapPin size={14} />,
+    fields: ["residenceType", "address", "addressNumber", "complement", "buildingName", "block", "floor", "unit", "referencePoint", "neighborhood", "city", "state", "postalCode"],
+  },
+  { title: "Cadastro", icon: <CalendarDays size={14} />, fields: ["recordNumber", "status", "inactiveAt", "clientSince", "source", "level", "imageConsent", "interests", "discount"] },
 ];
 
 function recordValue(record: ExternalPatientRecord, field: RecordField): string {
@@ -166,28 +157,45 @@ function recordValue(record: ExternalPatientRecord, field: RecordField): string 
 }
 
 function PatientRecordView({ record }: { record: ExternalPatientRecord }) {
-  const fields = recordFields.map((field) => [field, recordValue(record, field)] as const).filter(([, value]) => value);
+  const groups = recordGroups
+    .map((group) => ({ ...group, values: group.fields.map((field) => [field, recordValue(record, field)] as const).filter(([, value]) => value) }))
+    .filter((group) => group.values.length > 0 || group.title === "Cadastro");
   return (
     <>
-      <dl className="record-grid">
-        {fields.map(([field, value]) => (
-          <div key={field}>
-            <dt>{patientRecordLabels[field]}</dt>
-            <dd>{value}</dd>
+      <div className="record-groups">
+        {groups.map((group) => (
+          <div key={group.title} className="record-card">
+            <h4>
+              <span aria-hidden>{group.icon}</span> {group.title}
+            </h4>
+            <dl className="record-grid">
+              {group.values.map(([field, value]) => (
+                <div key={field}>
+                  <dt>{patientRecordLabels[field]}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+              {group.title === "Cadastro" ? (
+                <>
+                  <div>
+                    <dt>Filiais</dt>
+                    <dd>{record.branches.length ? record.branches.map((branch) => branch.name).join(", ") : "—"}</dd>
+                  </div>
+                  <div>
+                    <dt>Cadastrado em</dt>
+                    <dd>{fullDate(record.createdAt)}</dd>
+                  </div>
+                </>
+              ) : null}
+            </dl>
           </div>
         ))}
-        <div>
-          <dt>Filiais</dt>
-          <dd>{record.branches.length ? record.branches.map((branch) => branch.name).join(", ") : "—"}</dd>
-        </div>
-        <div>
-          <dt>Cadastrado em</dt>
-          <dd>{fullDate(record.createdAt)}</dd>
-        </div>
-      </dl>
+      </div>
       <div className="record-lists">
-        <div>
-          <h4>Etiquetas</h4>
+        <div className="record-card">
+          <h4>
+            <Tag size={14} aria-hidden /> Etiquetas
+          </h4>
           {record.tags.length ? (
             <ul className="record-tags" aria-label="Etiquetas">
               {record.tags.map((tag) => (
@@ -198,8 +206,10 @@ function PatientRecordView({ record }: { record: ExternalPatientRecord }) {
             <p className="muted">Sem etiquetas.</p>
           )}
         </div>
-        <div>
-          <h4>Planos ativos</h4>
+        <div className="record-card">
+          <h4>
+            <Layers size={14} aria-hidden /> Planos ativos
+          </h4>
           {record.activePlans.length ? (
             <ul className="record-list" aria-label="Planos ativos">
               {record.activePlans.map((plan) => (
@@ -213,8 +223,10 @@ function PatientRecordView({ record }: { record: ExternalPatientRecord }) {
             <p className="muted">Nenhum plano ativo.</p>
           )}
         </div>
-        <div>
-          <h4>Turmas</h4>
+        <div className="record-card">
+          <h4>
+            <UserRound size={14} aria-hidden /> Turmas
+          </h4>
           {record.groups.length ? (
             <ul className="record-list" aria-label="Turmas do cliente">
               {record.groups.map((group) => (
@@ -314,16 +326,18 @@ function PaymentHistory({ patientId }: { patientId: string }) {
           <option value="due">Vencimento</option>
           <option value="paid">Pagamento</option>
         </select>
-        <label className="inline-field">
-          De
-          <input type="date" aria-label="De" value={filters.from} max={filters.to || undefined} onChange={(event) => set({ from: event.target.value })} />
-        </label>
-        <label className="inline-field">
-          Até
-          <input type="date" aria-label="Até" value={filters.to} min={filters.from || undefined} onChange={(event) => set({ to: event.target.value })} />
-        </label>
+        <div className="period-field">
+          <label className="inline-field">
+            De
+            <input type="date" aria-label="De" value={filters.from} max={filters.to || undefined} onChange={(event) => set({ from: event.target.value })} />
+          </label>
+          <label className="inline-field">
+            Até
+            <input type="date" aria-label="Até" value={filters.to} min={filters.from || undefined} onChange={(event) => set({ to: event.target.value })} />
+          </label>
+        </div>
         {filtered ? (
-          <button type="button" className="link-button" onClick={() => setFilters(emptyHistoryFilters)}>
+          <button type="button" className="link-button payment-filters-clear" onClick={() => setFilters(emptyHistoryFilters)}>
             Limpar filtros
           </button>
         ) : null}

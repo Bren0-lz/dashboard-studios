@@ -37,7 +37,7 @@ export function Skeleton({ rows = 4, label = "Carregando" }: { rows?: number; la
 export function EmptyState({ title, hint, action }: { title: string; hint?: string; action?: ReactNode }) {
   return (
     <div className="empty-state">
-      <Inbox size={28} aria-hidden />
+      <Inbox size={24} aria-hidden />
       <strong>{title}</strong>
       {hint ? <p>{hint}</p> : null}
       {action}
@@ -109,7 +109,28 @@ export function WhatsAppButton({ href, label = "WhatsApp", compact = false }: { 
   );
 }
 
-export function Modal({ title, onClose, busy = false, children, size = "md" }: { title: string; onClose: () => void; busy?: boolean; children: ReactNode; size?: "sm" | "md" | "lg" }) {
+export function Modal({
+  title,
+  subtitle,
+  leading,
+  footer,
+  onClose,
+  busy = false,
+  children,
+  size = "md",
+}: {
+  title: string;
+  /** Linha de contexto abaixo do título (só exibição). */
+  subtitle?: ReactNode;
+  /** Elemento à esquerda do título, como o avatar do cliente. */
+  leading?: ReactNode;
+  /** Ações fixas no rodapé do modal. */
+  footer?: ReactNode;
+  onClose: () => void;
+  busy?: boolean;
+  children: ReactNode;
+  size?: "sm" | "md" | "lg";
+}) {
   useEscape(onClose, busy);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -120,12 +141,19 @@ export function Modal({ title, onClose, busy = false, children, size = "md" }: {
       <div className="overlay-backdrop" />
       <div ref={ref} className={`modal modal-${size}`} role="dialog" aria-modal="true" aria-label={title}>
         <header className="modal-head">
-          <h2>{title}</h2>
+          <div className="modal-title">
+            {leading}
+            <div className="modal-title-text">
+              <h2>{title}</h2>
+              {subtitle ? <p className="modal-subtitle">{subtitle}</p> : null}
+            </div>
+          </div>
           <button type="button" className="icon-button" onClick={onClose} disabled={busy} aria-label="Fechar">
             <X size={18} />
           </button>
         </header>
         <div className="modal-body">{children}</div>
+        {footer ? <footer className="modal-footer">{footer}</footer> : null}
       </div>
     </div>
   );
@@ -171,10 +199,38 @@ function useEscape(onClose: () => void, busy: boolean) {
   }, []);
 }
 
-export function Kpi({ label, value, detail, tone, onClick, children }: { label: string; value: string; detail?: ReactNode; tone?: "good" | "bad" | "warn"; onClick?: () => void; children?: ReactNode }) {
+export function Kpi({
+  label,
+  value,
+  detail,
+  tone,
+  icon,
+  iconTone,
+  onClick,
+  children,
+}: {
+  label: string;
+  value: string;
+  detail?: ReactNode;
+  tone?: "good" | "bad" | "warn";
+  /** Ícone decorativo ao lado do rótulo. */
+  icon?: ReactNode;
+  iconTone?: "good" | "bad" | "warn" | "info";
+  onClick?: () => void;
+  children?: ReactNode;
+}) {
   const content = (
     <>
-      <span className="kpi-label">{label}</span>
+      {icon ? (
+        <span className="kpi-top">
+          <span className={`kpi-icon${iconTone ? ` kpi-icon-${iconTone}` : ""}`} aria-hidden>
+            {icon}
+          </span>
+          <span className="kpi-label">{label}</span>
+        </span>
+      ) : (
+        <span className="kpi-label">{label}</span>
+      )}
       <strong className={`kpi-value${tone ? ` kpi-${tone}` : ""}`}>{value}</strong>
       {detail ? <span className="kpi-detail">{detail}</span> : null}
       {children}
