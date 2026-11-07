@@ -1,9 +1,9 @@
 import { useEffect } from "react";
-import { CalendarDays, Clock3, LayoutDashboard, LogOut, Receipt, RefreshCw, Users } from "lucide-react";
+import { CalendarDays, Clock3, Filter, LayoutDashboard, LogOut, Receipt, RefreshCw, Users } from "lucide-react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { businessLineLabels, type BranchesResponse, type LineFilter } from "@dash/shared";
+import { lineKeyLabels, lineKeys, type BranchesResponse, type FiltersResponse, type LineFilter } from "@dash/shared";
 import { setActiveBranch } from "../lib/api";
-import { globalFilters, useBranchFilter, useLineFilter } from "../lib/filters";
+import { globalFilters, useBranchFilter, usePanelFilter } from "../lib/filters";
 import { useRemote } from "../lib/useRemote";
 import { useSession } from "../lib/session";
 
@@ -17,20 +17,63 @@ const nav = [
 
 const lineOptions: { value: LineFilter; label: string }[] = [
   { value: "all", label: "Tudo" },
-  { value: "studio", label: businessLineLabels.studio },
-  { value: "aesthetics", label: businessLineLabels.aesthetics },
+  ...lineKeys.map((value) => ({ value, label: lineKeyLabels[value] })),
 ];
 
+/**
+ * Filtro do topo (PT6): linha (Tudo inclui Estética e Outros) e os serviços do CRM, vários ao
+ * mesmo tempo, agrupados por linha. Serviço inativo que ainda tem turma aparece marcado. Trocar a
+ * linha tira da escolha os serviços de outra linha.
+ */
 export function LineSwitch() {
-  const [line, setLine] = useLineFilter();
+  const [filter, setFilter] = usePanelFilter();
+  const { data } = useRemote<FiltersResponse>("/filters");
+  const options = data?.services ?? [];
+  const lineOfService = (id: string) => options.find((option) => option.id === id)?.line;
+  const chooseLine = (line: LineFilter) =>
+    setFilter({ line, services: line === "all" ? filter.services : filter.services.filter((id) => (lineOfService(id) ?? line) === line) });
+  const toggle = (id: string) =>
+    setFilter({ ...filter, services: filter.services.includes(id) ? filter.services.filter((item) => item !== id) : [...filter.services, id] });
+  const groups = (filter.line === "all" ? lineKeys : [filter.line])
+    .map((line) => ({ line, services: options.filter((option) => option.line === line) }))
+    .filter((group) => group.services.length > 0);
+  const count = filter.services.length;
   return (
-    <div className="segmented" role="group" aria-label="Linha de negócio">
-      {lineOptions.map((option) => (
-        <button key={option.value} type="button" className={line === option.value ? "active" : ""} aria-pressed={line === option.value} onClick={() => setLine(option.value)}>
-          {option.label}
-        </button>
-      ))}
-    </div>
+    <>
+      <div className="segmented" role="group" aria-label="Linha de negócio">
+        {lineOptions.map((option) => (
+          <button key={option.value} type="button" className={filter.line === option.value ? "active" : ""} aria-pressed={filter.line === option.value} onClick={() => chooseLine(option.value)}>
+            {option.label}
+          </button>
+        ))}
+      </div>
+      {options.length > 0 ? (
+        <details className="service-filter">
+          <summary className={count > 0 ? "active" : undefined}>
+            <Filter size={16} aria-hidden /> {count > 0 ? `Serviços (${count})` : "Serviços"}
+          </summary>
+          <div className="service-filter-menu" role="group" aria-label="Serviços">
+            {groups.length === 0 ? <p className="service-filter-empty">Nenhum serviço nesta linha.</p> : null}
+            {groups.map((group) => (
+              <fieldset key={group.line}>
+                <legend>{lineKeyLabels[group.line]}</legend>
+                {group.services.map((option) => (
+                  <label key={option.id} className="service-filter-option">
+                    <input type="checkbox" checked={filter.services.includes(option.id)} onChange={() => toggle(option.id)} />
+                    <span className={option.active ? undefined : "service-filter-inactive"}>{option.active ? option.name : `${option.name} (inativo)`}</span>
+                  </label>
+                ))}
+              </fieldset>
+            ))}
+            {count > 0 ? (
+              <button type="button" className="link-button" onClick={() => setFilter({ ...filter, services: [] })}>
+                Limpar serviços
+              </button>
+            ) : null}
+          </div>
+        </details>
+      ) : null}
+    </>
   );
 }
 

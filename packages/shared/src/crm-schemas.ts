@@ -5,7 +5,9 @@
  */
 import { z } from "zod";
 
-const businessLine = z.enum(["studio", "aesthetics"]).optional();
+const line = z.enum(["studio", "aesthetics"]).nullable();
+const businessLine = line.optional();
+const serviceLines = z.array(z.looseObject({ id: z.string(), name: z.string(), businessLine: line.default(null) })).optional();
 const slot = z.looseObject({ weekday: z.number().int().min(0).max(6), startTime: z.string(), endTime: z.string() });
 const enrollmentStatus = z.enum(["active", "waitlisted", "cancelled"]);
 
@@ -124,6 +126,7 @@ export const saleMovementSchema = z.looseObject({
   quantity: z.number(),
   amountInCents: z.number(),
   businessLine,
+  services: serviceLines,
 });
 
 export const salesReportSchema = z.looseObject({
@@ -204,6 +207,8 @@ export const overdueReportSchema = z.looseObject({
       daysOverdue: z.number(),
       band: z.enum(["1-7", "8-30", "31-60", "60+"]).optional(),
       businessLine,
+      services: serviceLines,
+      productLines: z.array(line).optional(),
     }),
   ),
 });

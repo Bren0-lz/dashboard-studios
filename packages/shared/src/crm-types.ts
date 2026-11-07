@@ -10,6 +10,16 @@
 
 export type BusinessLine = "studio" | "aesthetics";
 
+/**
+ * PX5: serviço de uma venda ou de um atraso, com a linha do cadastro (inclusive de serviço
+ * inativo). `businessLine: null` = sem classificação ("Outros" no painel).
+ */
+export interface ServiceLineRef {
+  id: string;
+  name: string;
+  businessLine: BusinessLine | null;
+}
+
 export interface GroupWeeklySlot {
   /** 0 = domingo … 6 = sábado. */
   weekday: number;
@@ -59,8 +69,8 @@ export interface ExternalGroupRow {
   sessionsPerMonth: number;
   monthlyRevenueInCents: number;
   potentialMonthlyRevenueInCents: number;
-  /** Fase 0 (3.1). */
-  businessLine?: BusinessLine;
+  /** Fase 0 (3.1); PX3: `null` = serviço sem classificação ("Outros"). Ausente (CRM antigo) = Studio. */
+  businessLine?: BusinessLine | null;
   /** Fase 0 (3.2). */
   overdueMembers?: number;
   /** Fase 0 (3.2). */
@@ -136,7 +146,15 @@ export interface ExternalOverdueRow {
   oldestDueDate: string;
   daysOverdue: number;
   band?: OverdueBand;
-  businessLine?: BusinessLine;
+  /** CRM antes da PX5 (o painel deduzia a linha pela turma do cliente). */
+  businessLine?: BusinessLine | null;
+  /**
+   * PX5: serviços de onde vêm as parcelas vencidas (plano, serviço da comanda). Ausente = CRM
+   * antigo; vazio junto com `productLines` = atraso sem vínculo (só aparece em "Tudo").
+   */
+  services?: ServiceLineRef[];
+  /** PX5: linhas dos produtos das parcelas vencidas (`null` = Outros). */
+  productLines?: (BusinessLine | null)[];
   lastContactAt?: string;
 }
 
@@ -153,8 +171,8 @@ export interface Service {
   active: boolean;
   priceInCents?: number;
   durationMinutes?: number;
-  /** Fase 0 (3.1). */
-  businessLine?: BusinessLine;
+  /** Fase 0 (3.1); PX3: `null` = sem classificação. */
+  businessLine?: BusinessLine | null;
 }
 
 export interface Professional {
@@ -196,8 +214,13 @@ export interface SaleMovement {
   amountInCents: number;
   receivableId?: string;
   customerDiscountInCents?: number;
-  /** Fase 0 (3.1). */
-  businessLine?: BusinessLine;
+  /**
+   * PX5: linha do produto, só em venda de produto (`null` = Outros). Num CRM antigo podia vir em
+   * qualquer venda (fase 0).
+   */
+  businessLine?: BusinessLine | null;
+  /** PX5: serviço da venda (serviço) ou todos os serviços do plano; vazio em produto. Ausente = CRM antigo. */
+  services?: ServiceLineRef[];
   /** Profissional da venda, quando o CRM informar. */
   professionalName?: string;
 }

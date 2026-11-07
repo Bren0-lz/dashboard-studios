@@ -8,7 +8,7 @@ import { buildMockCrm } from "../../../bff/src/mock-crm/app";
  * "Servidor" das telas nos testes: o BFF de verdade com o CRM simulado, tudo em memória.
  * O `fetch` do navegador é trocado por chamadas `inject`, com um pote de cookies simples.
  */
-export async function startServer(options: { withoutPhase0?: boolean; withoutBranches?: boolean; withoutMemberNames?: boolean } = {}) {
+export async function startServer(options: { withoutPhase0?: boolean; withoutBranches?: boolean; withoutMemberNames?: boolean; withoutLineDetails?: boolean } = {}) {
   const crm = buildMockCrm({ apiKey: API_KEY, today: TODAY, ...options });
   const app = await buildApp(testConfig(), { fetch: injectFetch(crm.app), goals: memoryGoalsStore({ studio: 2_000_000, aesthetics: 800_000 }), today: () => TODAY });
   let cookie = "";

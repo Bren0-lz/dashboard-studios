@@ -34,6 +34,8 @@
   --studio-bg: #e3edf8;
   --aesthetics: #c2477f;
   --aesthetics-bg: #f8e3ee;
+  --other: #5f6862;
+  --other-bg: #eceae4;
   --shadow: 0 1px 2px rgba(34, 50, 44, 0.06), 0 6px 16px rgba(34, 50, 44, 0.06);
   --shadow-sm: 0 1px 2px rgba(34, 50, 44, 0.05);
   --space-1: 4px;
@@ -179,6 +181,77 @@ a {
   flex-wrap: wrap;
   gap: var(--space-2) var(--space-3);
   min-width: 0;
+}
+/* Filtro de serviços do topo (PT6): lista suspensa com caixas de seleção por linha. */
+.service-filter {
+  position: relative;
+}
+.service-filter summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  list-style: none;
+  cursor: pointer;
+}
+.service-filter summary::-webkit-details-marker {
+  display: none;
+}
+.service-filter summary.active {
+  border-color: var(--green);
+  color: var(--green);
+}
+.service-filter-menu {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 240px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+.service-filter-menu fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.service-filter-menu legend {
+  margin-bottom: var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.service-filter-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.service-filter-inactive,
+.service-filter-empty {
+  color: var(--muted);
+}
+.service-filter-empty {
+  margin: 0;
+  font-size: var(--text-sm);
 }
 .branch-select select {
   min-height: 36px;
@@ -391,6 +464,10 @@ a {
 .line-pill.line-aesthetics {
   background: var(--aesthetics-bg);
   color: var(--aesthetics);
+}
+.line-pill.line-other {
+  background: var(--other-bg);
+  color: var(--other);
 }
 .icon-count {
   display: inline-flex;

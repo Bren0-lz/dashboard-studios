@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { BranchesResponse, GroupDetailsResponse, GroupsResponse, LeadsResponse, OverdueResponse, OverviewResponse, SalesResponse, SessionInfo, WaitlistResponse } from "@dash/shared";
+import type { BranchesResponse, FiltersResponse, GroupDetailsResponse, GroupsResponse, LeadsResponse, OverdueResponse, OverviewResponse, SalesResponse, SessionInfo, WaitlistResponse } from "@dash/shared";
 import { createHarness, API_KEY } from "./test-support/harness.js";
 
 describe("sessão e segurança", () => {
@@ -65,6 +65,8 @@ describe("turmas", () => {
     const aesthetics = (await session.get("/api/groups?linha=aesthetics")).json() as GroupsResponse;
     expect(studio.groups.every((group) => group.businessLine === "studio")).toBe(true);
     expect(aesthetics.groups.map((group) => group.name).sort()).toEqual(["Laser Qua 14h", "Limpeza de pele Sáb 10h"]);
+    // Turma de serviço inativo (fora de `/services`) entra pela linha que vem na própria turma.
+    expect(studio.groups.map((group) => group.name)).toContain("Pilates Solo Sex 10h");
     expect(studio.groups.length + aesthetics.groups.length).toBe(all.groups.length);
     expect(all.totals.overdueMembers).toBeGreaterThan(0);
   });
@@ -278,7 +280,8 @@ describe("visão geral, vendas e leads", () => {
     const { login } = await createHarness();
     const session = await login();
     const sales = (await session.get("/api/sales?from=2026-10-01&to=2026-10-31")).json() as SalesResponse;
-    expect(sales.byLine.studio + sales.byLine.aesthetics).toBe(sales.summary.netSalesInCents);
+    // O plano combinado (Pilates + Limpeza de pele, R$ 500) entra inteiro nas duas linhas.
+    expect(sales.byLine.studio + sales.byLine.aesthetics + sales.byLine.other - 50_000).toBe(sales.summary.netSalesInCents);
     expect(sales.previous).toMatchObject({ from: "2026-08-31", to: "2026-09-30" });
     const studio = (await session.get("/api/sales?from=2026-10-01&to=2026-10-31&linha=studio")).json() as SalesResponse;
     expect(studio.summary.netSalesInCents).toBe(sales.byLine.studio);
@@ -360,5 +363,146 @@ describe("CRM sem a fase 0", () => {
     const session = await login();
     expect(session.response.statusCode).toBe(502);
     expect(session.response.json()).toMatchObject({ code: "login_unavailable" });
+  });
+});
+
+describe("filtro por linha e por serviço (PT6)", () => {
+  const svc = (n: number) => `00000000-0000-4000-8000-51${String(n).padStart(10, "0")}`;
+  const PILATES = svc(1);
+  const DANCA = svc(2);
+  const PELE = svc(4);
+  const AVALIACAO = svc(5);
+  const SOLO = svc(6);
+  const MONTH = "from=2026-10-01&to=2026-10-31";
+  const overdueRows = (report: OverdueResponse) => [...report.risk, ...report.bands.flatMap((band) => band.rows)];
+
+  it("lista os serviços ativos por linha e o inativo que ainda tem turma, marcado como inativo", async () => {
+    const { login } = await createHarness();
+    const session = await login();
+    const filters = (await session.get("/api/filters")).json() as FiltersResponse;
+    expect(filters.lines).toBe(true);
+    expect(filters.services.map((item) => [item.name, item.line, item.active])).toEqual([
+      ["Avaliação funcional", "other", true],
+      ["Dançaterapia", "studio", true],
+      ["Depilação a laser", "aesthetics", true],
+      ["Limpeza de pele", "aesthetics", true],
+      ["Pilates", "studio", true],
+      ["Pilates Solo", "studio", false],
+    ]);
+  });
+
+  it("filtra turmas e espera por um ou vários serviços", async () => {
+    const { login } = await createHarness();
+    const session = await login();
+    const solo = (await session.get(`/api/groups?servicos=${SOLO}`)).json() as GroupsResponse;
+    expect(solo.groups.map((group) => group.name)).toEqual(["Pilates Solo Sex 10h"]);
+    const two = (await session.get(`/api/groups?servicos=${PILATES},${DANCA}`)).json() as GroupsResponse;
+    expect(two.groups.map((group) => group.name).sort()).toEqual([
+      "Dança Sex 15h",
+      "Dança Ter/Qui 19h",
+      "Pilates Seg/Qua 19h",
+      "Pilates Seg/Qua 7h",
+      "Pilates Sáb 9h",
+      "Pilates Ter/Qui 18h",
+    ]);
+    expect(two.totals.groups).toBe(6);
+    // Serviço de outra linha que a escolhida: nada.
+    expect(((await session.get(`/api/groups?linha=aesthetics&servicos=${PILATES}`)).json() as GroupsResponse).groups).toEqual([]);
+    expect(((await session.get("/api/groups?linha=other")).json() as GroupsResponse).groups).toEqual([]);
+    const waitlist = (await session.get(`/api/waitlist?servicos=${PILATES}`)).json() as WaitlistResponse;
+    expect(waitlist.rows).toHaveLength(3);
+    expect(waitlist.rows.every((row) => row.serviceId === PILATES)).toBe(true);
+    expect(waitlist.services).toEqual([{ id: PILATES, name: "Pilates" }]);
+  });
+
+  it("plano com dois serviços em duas linhas aparece nas duas, e a seleção conta a venda uma vez", async () => {
+    const { login } = await createHarness();
+    const session = await login();
+    const get = async (query: string) => (await session.get(`/api/sales?${MONTH}&${query}`)).json() as SalesResponse;
+    const combo = (report: SalesResponse) => report.sales.filter((sale) => sale.itemName === "Combo Pilates + Limpeza de pele");
+    const studio = await get("linha=studio");
+    const aesthetics = await get("linha=aesthetics");
+    expect(combo(studio)).toHaveLength(1);
+    expect(combo(aesthetics)).toHaveLength(1);
+    expect(combo(aesthetics)[0]!.amountInCents).toBe(50_000);
+    const pilates = await get(`servicos=${PILATES}`);
+    const pele = await get(`servicos=${PELE}`);
+    const both = await get(`servicos=${PILATES},${PELE}`);
+    expect(combo(both)).toHaveLength(1);
+    expect(both.summary.netSalesInCents).toBe(pilates.summary.netSalesInCents + pele.summary.netSalesInCents - 50_000);
+    expect(both.summary.netSalesInCents).toBe(both.sales.reduce((sum, sale) => sum + (sale.kind === "sale" ? sale.amountInCents : -sale.amountInCents), 0));
+    expect(both.daily.reduce((sum, day) => sum + day.total, 0)).toBe(both.summary.netSalesInCents);
+    expect(both.partialLine).toBe(true);
+    expect(both.saleServices).toBe(true);
+    // "Tudo" inclui Estética e Outros.
+    const all = await get("linha=all");
+    expect(all.summary.netSalesInCents).toBeGreaterThan(studio.summary.netSalesInCents + aesthetics.summary.netSalesInCents - 50_000);
+  });
+
+  it("venda de produto entra pela linha do próprio produto, e não na escolha de serviços", async () => {
+    const { login } = await createHarness();
+    const session = await login();
+    const items = async (query: string) => ((await session.get(`/api/sales?${MONTH}&${query}`)).json() as SalesResponse).sales.map((sale) => sale.itemName);
+    const studio = await items("linha=studio");
+    expect(studio).toContain("Meia antiderrapante");
+    expect(studio).not.toContain("Óleo corporal");
+    expect(await items("linha=aesthetics")).toContain("Óleo corporal");
+    const other = await items("linha=other");
+    expect(new Set(other)).toEqual(new Set(["Vale-presente", "Avaliação funcional"]));
+    expect(await items(`servicos=${AVALIACAO}`)).toEqual(["Avaliação funcional"]);
+    expect(await items(`servicos=${PILATES}`)).not.toContain("Meia antiderrapante");
+    const csv = await session.get(`/api/sales.csv?${MONTH}&linha=studio`);
+    expect(csv.body).toContain("Combo Pilates + Limpeza de pele;Plano;Studio, Estética");
+  });
+
+  it("inadimplência pelos serviços e produtos das parcelas; sem vínculo, só em Tudo", async () => {
+    const { crm, login } = await createHarness();
+    const session = await login();
+    const names = async (query: string) => overdueRows((await session.get(`/api/overdue?${query}`)).json() as OverdueResponse).map((row) => row.patientName);
+    const combo = crm.state.patients[44]!.fullName;
+    const product = crm.state.patients[45]!.fullName;
+    const unlinked = crm.state.patients[47]!.fullName;
+    const all = await names("");
+    const studio = await names("linha=studio");
+    const aesthetics = await names("linha=aesthetics");
+    const other = await names("linha=other");
+    expect(all).toEqual(expect.arrayContaining([combo, product, unlinked]));
+    expect(studio).toContain(combo);
+    expect(aesthetics).toContain(combo);
+    expect(other).toEqual([product]);
+    for (const list of [studio, aesthetics, other]) expect(list).not.toContain(unlinked);
+    expect(await names(`servicos=${PELE}`)).toContain(combo);
+    expect(await names(`servicos=${PILATES},${PELE}`)).not.toContain(product);
+    // A visão geral usa o mesmo filtro.
+    const overview = (await session.get("/api/overview?linha=other")).json() as OverviewResponse;
+    expect(overview.overdue).toMatchObject({ clients: 1, totalInCents: 10_000 });
+    expect(overview.goal).toBeNull();
+    const byService = (await session.get(`/api/overview?servicos=${PILATES}`)).json() as OverviewResponse;
+    expect(byService.goal).toBeNull();
+    expect(byService.features.saleServices).toBe(true);
+    expect(byService.dailySales.reduce((sum, day) => sum + day.total, 0)).toBe(byService.sales.currentInCents);
+  });
+
+  it("com um CRM sem os campos da PX5, volta a deduzir pela turma e não quebra", async () => {
+    const { crm, login } = await createHarness({ withoutLineDetails: true });
+    const session = await login();
+    const sales = (await session.get(`/api/sales?${MONTH}`)).json() as SalesResponse;
+    expect(sales.saleServices).toBe(false);
+    expect(sales.sales.every((sale) => sale.services === undefined)).toBe(true);
+    // Sem `services`, cada venda conta só na linha que o CRM informa.
+    expect(sales.byLine.studio + sales.byLine.aesthetics + sales.byLine.other).toBe(sales.summary.netSalesInCents);
+    const studio = (await session.get(`/api/sales?${MONTH}&linha=studio`)).json() as SalesResponse;
+    expect(studio.summary.netSalesInCents).toBe(sales.byLine.studio);
+    const byService = (await session.get(`/api/sales?${MONTH}&servicos=${PILATES}`)).json() as SalesResponse;
+    expect(byService.sales).toEqual([]);
+    const overview = (await session.get(`/api/overview?servicos=${PILATES}`)).json() as OverviewResponse;
+    expect(overview.features.saleServices).toBe(false);
+    // Inadimplência: pela turma do cliente (o atraso sem turma volta a contar como Studio).
+    const rows = (query: string) => session.get(`/api/overdue?${query}`).then((response) => overdueRows(response.json() as OverdueResponse));
+    const unlinked = crm.state.patients[47]!.fullName;
+    expect((await rows("linha=studio")).map((row) => row.patientName)).toContain(unlinked);
+    const pilatesRows = await rows(`servicos=${PILATES}`);
+    expect(pilatesRows.length).toBeGreaterThan(0);
+    expect(pilatesRows.every((row) => row.groups.some((group) => group.groupName.startsWith("Pilates")))).toBe(true);
   });
 });

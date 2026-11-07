@@ -282,6 +282,72 @@ describe("espera, inadimplência e calendário", () => {
   });
 });
 
+describe("filtro por linha e por serviço (PT6)", () => {
+  const openServices = async (user: ReturnType<typeof userEvent.setup>) => user.click(await screen.findByText(/^Serviços/, { selector: "summary" }));
+
+  it("filtra as turmas por vários serviços, marca o inativo e leva a escolha para as outras telas", async () => {
+    const { calls } = await startServer();
+    const user = userEvent.setup();
+    renderAt("/turmas");
+    await login(user);
+    expect(await screen.findByRole("article", { name: "Pilates Ter/Qui 18h" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Linha de negócio" })).toHaveTextContent("TudoStudioEstéticaOutros");
+    await openServices(user);
+    const menu = screen.getByRole("group", { name: "Serviços" });
+    expect(within(menu).getByRole("group", { name: "Outros" })).toHaveTextContent("Avaliação funcional");
+    await user.click(within(menu).getByRole("checkbox", { name: "Pilates Solo (inativo)" }));
+    await user.click(within(menu).getByRole("checkbox", { name: "Dançaterapia" }));
+    await waitFor(() => expect(screen.queryByRole("article", { name: "Pilates Ter/Qui 18h" })).not.toBeInTheDocument());
+    expect(await screen.findByRole("article", { name: "Pilates Solo Sex 10h" })).toBeInTheDocument();
+    expect(screen.getByRole("article", { name: "Dança Ter/Qui 19h" })).toBeInTheDocument();
+    expect(screen.getByText("Serviços (2)", { selector: "summary" })).toBeInTheDocument();
+
+    // A escolha vai na URL e acompanha a navegação.
+    await user.click(screen.getByRole("link", { name: "Inadimplência" }));
+    expect(await screen.findByRole("heading", { name: "Quem preciso cobrar?" })).toBeInTheDocument();
+    const overdueCall = calls.find((call) => call.url.startsWith("/api/overdue"))!;
+    const query = new URLSearchParams(overdueCall.url.split("?")[1]);
+    expect(query.get("servicos")?.split(",").sort()).toEqual(["00000000-0000-4000-8000-510000000002", "00000000-0000-4000-8000-510000000006"]);
+    await openServices(user);
+    expect(screen.getByRole("checkbox", { name: "Dançaterapia" })).toBeChecked();
+    expect(screen.getByRole("link", { name: "Visão geral" }).getAttribute("href")).toContain("servicos=");
+
+    // Trocar para Estética tira os serviços do Studio e mostra só os da linha.
+    await user.click(screen.getByRole("button", { name: "Estética" }));
+    await waitFor(() => expect(screen.getByText("Serviços", { selector: "summary" })).toBeInTheDocument());
+    expect(screen.queryByRole("checkbox", { name: "Dançaterapia" })).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Limpeza de pele" })).not.toBeChecked();
+  });
+
+  it("mostra Outros nas turmas e na inadimplência; o atraso sem vínculo só aparece em Tudo", async () => {
+    const { crm } = await startServer();
+    const user = userEvent.setup();
+    renderAt("/inadimplencia");
+    await login(user);
+    const product = crm.state.patients[45]!.fullName;
+    const unlinked = crm.state.patients[47]!.fullName;
+    expect(await screen.findByText(unlinked)).toBeInTheDocument();
+    expect(screen.getByText(product)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Outros" }));
+    await waitFor(() => expect(screen.queryByText(unlinked)).not.toBeInTheDocument());
+    expect(await screen.findByText(product)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Studio" }));
+    await waitFor(() => expect(screen.queryByText(product)).not.toBeInTheDocument());
+    expect(screen.queryByText(unlinked)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Tudo" }));
+    expect(await screen.findByText(unlinked)).toBeInTheDocument();
+  });
+
+  it("com um CRM sem os serviços nas vendas, avisa na visão geral ao escolher serviços", async () => {
+    await startServer({ withoutLineDetails: true });
+    const user = userEvent.setup();
+    renderAt("/?servicos=00000000-0000-4000-8000-510000000001");
+    await login(user);
+    expect(await screen.findByText(/O CRM ainda não informa os serviços de cada venda/)).toBeInTheDocument();
+    expect(screen.getByText("Faturamento do mês")).toBeInTheDocument();
+  });
+});
+
 describe("CRM sem a fase 0", () => {
   it("avisa que o login como usuário ainda não existe", async () => {
     await startServer({ withoutPhase0: true });

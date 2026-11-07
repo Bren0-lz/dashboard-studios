@@ -1,4 +1,5 @@
 /** Respostas do servidor do dashboard (BFF) para o navegador. */
+import type { LineKey } from "./business-line.js";
 import type {
   BusinessLine,
   ExternalGroupDetails,
@@ -33,6 +34,36 @@ export interface CrmFeatures {
   planSale: boolean;
   businessLine: boolean;
   overdue: boolean;
+  /**
+   * PX5: o CRM informa os serviços de cada venda (`SaleMovement.services`). `false` = CRM antigo:
+   * com serviços escolhidos no filtro, as vendas ficam de fora. Só na visão geral e nas vendas.
+   */
+  saleServices?: boolean;
+}
+
+/** Serviço que aparece no filtro do topo (PT6). */
+export interface FilterServiceOption {
+  id: string;
+  name: string;
+  line: LineKey;
+  /** `false`: serviço inativo no CRM que ainda tem turma (fica no filtro, marcado como inativo). */
+  active: boolean;
+}
+
+/** `GET /api/filters`: serviços do filtro, agrupados por linha no topo. */
+export interface FiltersResponse {
+  /** `false` = o CRM ainda não informa a linha dos serviços (tudo conta como Studio). */
+  lines: boolean;
+  services: FilterServiceOption[];
+}
+
+/** Série diária de vendas: `total` conta cada venda uma vez; cada linha, as vendas dela (valor inteiro). */
+export interface DailySales {
+  date: string;
+  total: number;
+  studio: number;
+  aesthetics: number;
+  other: number;
 }
 
 /** `GET /api/branches`: filiais do usuário; `available: false` = o CRM ainda não informa. */
@@ -58,7 +89,8 @@ export interface CompatibleGroup {
 }
 
 export interface GroupRow extends ExternalGroupRow {
-  businessLine: BusinessLine;
+  /** `null` = serviço sem classificação ("Outros"). */
+  businessLine: BusinessLine | null;
   averageTicketInCents: number;
   /** Vagas livres × ticket médio: receita que falta vender. */
   idleRevenueInCents: number;
@@ -75,7 +107,7 @@ export interface GroupsResponse {
   features: CrmFeatures;
 }
 
-export type GroupDetailsResponse = ExternalGroupDetails & { businessLine: BusinessLine };
+export type GroupDetailsResponse = ExternalGroupDetails & { businessLine: BusinessLine | null };
 
 export interface EnrollResult {
   status: "active" | "waitlisted";
@@ -90,7 +122,8 @@ export interface CancelEnrollmentResult {
 }
 
 export interface WaitlistRow extends WaitlistEntry {
-  businessLine: BusinessLine;
+  /** Linha do serviço aguardado; `null` = sem classificação ou sem serviço (produto). */
+  businessLine: BusinessLine | null;
   position: number | null;
   waitingDays: number;
   compatibleGroups: CompatibleGroup[];
@@ -174,7 +207,7 @@ export interface OverviewResponse {
   waitlist: { waiting: number; withSeat: number };
   leads: { open: number; conversionRate: number; withoutContact: number } | null;
   opportunities: Opportunity[];
-  dailySales: { date: string; studio: number; aesthetics: number }[];
+  dailySales: DailySales[];
 }
 
 export interface SalesRankingItem {
@@ -189,12 +222,15 @@ export interface SalesResponse {
   summary: SalesReportPeriod & { averageTicketInCents: number; salesCount: number };
   previous: SalesReportPeriod & { from: string; to: string };
   changePercent: number | null;
-  /** Filtro por linha: recebido e atendidos não se separam por linha e ficam de fora. */
+  /** Filtro de linha ou serviço: recebido e atendidos não se separam por linha e ficam de fora. */
   partialLine: boolean;
-  byLine: Record<BusinessLine, number>;
+  /** O CRM informa os serviços de cada venda (PX5); `false` = filtro por serviço não alcança as vendas. */
+  saleServices: boolean;
+  /** Por linha, sem o filtro; o plano com serviços de duas linhas entra nas duas (a soma pode passar do total). */
+  byLine: Record<LineKey, number>;
   topItems: SalesRankingItem[];
   byProfessional: SalesRankingItem[];
-  daily: { date: string; studio: number; aesthetics: number }[];
+  daily: DailySales[];
   sales: SaleMovement[];
 }
 

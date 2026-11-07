@@ -15,7 +15,7 @@ import {
 import { GroupCard } from "../components/GroupCard";
 import { BranchSelect } from "../components/Layout";
 import { EmptyState, ErrorBanner, Kpi, Notice, PageHeader, Skeleton } from "../components/ui";
-import { useLineFilter, withLine } from "../lib/filters";
+import { usePanelFilter, withFilter } from "../lib/filters";
 import { useGroupFlow } from "../lib/useGroupFlow";
 import { useRemote } from "../lib/useRemote";
 import { useSession } from "../lib/session";
@@ -33,9 +33,9 @@ const emptyFilters: Filters = { weekday: "", period: "", professional: "", onlyF
 type View = "cards" | "table";
 
 export function GroupsPage() {
-  const [line] = useLineFilter();
+  const [filter] = usePanelFilter();
   const { session } = useSession();
-  const groups = useRemote<GroupsResponse>(withLine("/groups", line));
+  const groups = useRemote<GroupsResponse>(withFilter("/groups", filter));
   const flow = useGroupFlow(groups.data?.features.planSale ?? false, groups.reload);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [view, setView] = useState<View>("cards");

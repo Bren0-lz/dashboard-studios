@@ -1,12 +1,18 @@
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { formatMoney, formatMoneyShort, shortDate, type LineFilter } from "@dash/shared";
+import { formatMoney, formatMoneyShort, isFilterActive, lineKeyLabels, lineKeys, shortDate, type DailySales, type PanelFilter } from "@dash/shared";
 
-const colors = { studio: "#2f6fb5", aesthetics: "#c2477f" };
+const colors = { studio: "#2f6fb5", aesthetics: "#c2477f", other: "#7d857f", total: "#26705f" };
+const seriesLabel = (name: unknown) => (name === "total" ? "Seleção" : (lineKeyLabels[name as keyof typeof lineKeyLabels] ?? String(name)));
 
-/** Vendas por dia, uma série para Studio e outra para Estética (empilhadas). */
-export function DailySalesChart({ data, line }: { data: { date: string; studio: number; aesthetics: number }[]; line: LineFilter }) {
-  const showStudio = line !== "aesthetics";
-  const showAesthetics = line !== "studio";
+/**
+ * Vendas por dia. Sem filtro: uma barra por linha, lado a lado (o plano com serviços de duas linhas
+ * entra inteiro nas duas, então empilhar somaria a venda duas vezes). Com filtro: uma barra só, com
+ * o total da seleção (cada venda uma vez).
+ */
+export function DailySalesChart({ data, filter }: { data: DailySales[]; filter: PanelFilter }) {
+  const filtered = isFilterActive(filter);
+  const series = filtered ? (["total"] as const) : lineKeys;
+  const color = (key: (typeof series)[number]) => (key === "total" && filter.services.length === 0 && filter.line !== "all" ? colors[filter.line] : colors[key]);
   return (
     <div className="chart" aria-label="Gráfico de vendas por dia">
       <ResponsiveContainer width="100%" height={240}>
@@ -14,14 +20,11 @@ export function DailySalesChart({ data, line }: { data: { date: string; studio: 
           <CartesianGrid stroke="#e5e2da" vertical={false} />
           <XAxis dataKey="date" tickFormatter={(value: string) => value.slice(8, 10)} tick={{ fontSize: 12, fill: "#748079" }} tickLine={false} axisLine={false} />
           <YAxis tickFormatter={(value: number) => formatMoneyShort(value)} tick={{ fontSize: 12, fill: "#748079" }} tickLine={false} axisLine={false} width={84} />
-          <Tooltip
-            formatter={(value, name) => [formatMoney(Number(value)), name === "studio" ? "Studio" : "Estética"]}
-            labelFormatter={(label) => shortDate(String(label))}
-            cursor={{ fill: "rgba(24,79,67,0.06)" }}
-          />
-          {line === "all" ? <Legend formatter={(value: string) => (value === "studio" ? "Studio" : "Estética")} wrapperStyle={{ fontSize: 13 }} /> : null}
-          {showStudio ? <Bar dataKey="studio" stackId="sales" fill={colors.studio} isAnimationActive={false} radius={showAesthetics ? 0 : [4, 4, 0, 0]} /> : null}
-          {showAesthetics ? <Bar dataKey="aesthetics" stackId="sales" fill={colors.aesthetics} isAnimationActive={false} radius={[4, 4, 0, 0]} /> : null}
+          <Tooltip formatter={(value, name) => [formatMoney(Number(value)), seriesLabel(name)]} labelFormatter={(label) => shortDate(String(label))} cursor={{ fill: "rgba(24,79,67,0.06)" }} />
+          {filtered ? null : <Legend formatter={(value: string) => seriesLabel(value)} wrapperStyle={{ fontSize: 13 }} />}
+          {series.map((key) => (
+            <Bar key={key} dataKey={key} fill={color(key)} isAnimationActive={false} radius={[4, 4, 0, 0]} />
+          ))}
         </BarChart>
       </ResponsiveContainer>
     </div>
