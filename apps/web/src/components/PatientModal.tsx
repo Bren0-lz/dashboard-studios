@@ -12,7 +12,6 @@ import {
   paymentOrigins,
   paymentStatusFilterLabels,
   paymentStatusFilters,
-  patientRecordLabels,
   plural,
   residenceTypeLabels,
   shortDate,
@@ -63,7 +62,7 @@ export function PatientModal({ patient, onClose }: { patient: PatientRef; onClos
   return (
     <Modal
       title={patient.name}
-      subtitle={record ? [record.recordNumber, record.status === "active" ? "Cliente ativo" : "Cliente inativo"].filter(Boolean).join(" · ") : undefined}
+      subtitle={record ? <PatientHeadline record={record} /> : undefined}
       leading={
         <span className="avatar avatar-lg" aria-hidden>
           {initials(patient.name)}
@@ -95,11 +94,7 @@ export function PatientModal({ patient, onClose }: { patient: PatientRef; onClos
             <h3 className="section-title">
               <CreditCard size={16} aria-hidden /> Histórico de pagamentos
             </h3>
-            {session.can.seeFinance ? (
-              <PaymentHistory patientId={patient.id} />
-            ) : (
-              <Notice>Sem acesso ao Financeiro no CRM: o histórico de pagamentos fica escondido.</Notice>
-            )}
+            {session.can.seeFinance ? <PaymentHistory patientId={patient.id} /> : <Notice>Sem acesso ao Financeiro no CRM: o histórico de pagamentos fica escondido.</Notice>}
           </section>
         </>
       )}
@@ -107,89 +102,148 @@ export function PatientModal({ patient, onClose }: { patient: PatientRef; onClos
   );
 }
 
-type RecordField = keyof typeof patientRecordLabels;
+type Row = readonly [label: string, value: ReactNode];
 
-/** Campos da ficha agrupados em blocos só para leitura; blocos sem nenhum valor somem. */
-const recordGroups: { title: string; icon: ReactNode; fields: RecordField[] }[] = [
-  { title: "Contato", icon: <Phone size={14} />, fields: ["phone", "whatsapp", "email", "emergencyContactName", "emergencyContactPhone", "guardianName", "guardianPhone"] },
-  { title: "Pessoal", icon: <User size={14} />, fields: ["birthDate", "cpf", "nickname", "gender", "occupation"] },
-  {
-    title: "Endereço",
-    icon: <MapPin size={14} />,
-    fields: ["residenceType", "address", "addressNumber", "complement", "buildingName", "block", "floor", "unit", "referencePoint", "neighborhood", "city", "state", "postalCode"],
-  },
-  { title: "Cadastro", icon: <CalendarDays size={14} />, fields: ["recordNumber", "status", "inactiveAt", "clientSince", "source", "level", "imageConsent", "interests", "discount"] },
-];
+/** "jan. de 2023" a partir de aaaa-mm-dd (ou ISO completo). */
+function monthYear(iso: string): string {
+  const [year, month] = iso.slice(0, 10).split("-").map(Number);
+  if (!year || !month) return iso;
+  return new Intl.DateTimeFormat("pt-BR", {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month - 1, 1)));
+}
 
-function recordValue(record: ExternalPatientRecord, field: RecordField): string {
-  const value = record[field];
-  if (value === undefined || value === null || value === "") return "";
-  switch (field) {
-    case "status":
-      return record.status === "active" ? "Ativo" : "Inativo";
-    case "phone":
-    case "whatsapp":
-    case "emergencyContactPhone":
-    case "guardianPhone":
-      return formatPhone(String(value));
-    case "birthDate":
-    case "clientSince":
-    case "inactiveAt":
-      return fullDate(String(value));
-    case "gender":
-      return genderLabels[String(value)] ?? String(value);
-    case "residenceType":
-      return residenceTypeLabels[String(value)] ?? String(value);
-    case "imageConsent":
-      return value ? "Sim" : "Não";
-    case "interests":
-      return (record.interests ?? []).join(", ");
-    case "discount": {
-      const discount = record.discount;
-      if (!discount) return "";
-      const amount = discount.type === "percentage" ? `${discount.percent ?? 0}%` : formatMoney(discount.amountInCents ?? 0);
-      const scope = discount.scope === "permanent" ? "em todas as cobranças" : discount.scope === "next" ? `nas próximas ${discount.charges ?? 0} cobranças` : discount.scope === "once" ? "na próxima cobrança" : "";
-      return [amount, scope].filter(Boolean).join(" ");
-    }
-    default:
-      return String(value);
-  }
+/** Idade completa hoje a partir de aaaa-mm-dd; `null` quando a data não é válida. */
+function ageOf(iso: string): number | null {
+  const [year, month, day] = iso.slice(0, 10).split("-").map(Number);
+  if (!year || !month || !day) return null;
+  const today = new Date();
+  let age = today.getFullYear() - year;
+  if (today.getMonth() + 1 < month || (today.getMonth() + 1 === month && today.getDate() < day)) age -= 1;
+  return age >= 0 ? age : null;
+}
+
+/** Nome e telefone na mesma linha ("Natália (mãe) · (11) 98000-0004"). */
+function personLine(name?: string, phone?: string): string {
+  return [name, phone ? formatPhone(phone) : ""].filter(Boolean).join(" · ");
+}
+
+function discountText(record: ExternalPatientRecord): string {
+  const discount = record.discount;
+  if (!discount) return "";
+  const amount = discount.type === "percentage" ? `${discount.percent ?? 0}%` : formatMoney(discount.amountInCents ?? 0);
+  const scope = discount.scope === "permanent" ? "em todas as cobranças" : discount.scope === "next" ? `nas próximas ${discount.charges ?? 0} cobranças` : discount.scope === "once" ? "na próxima cobrança" : "";
+  return [amount, scope].filter(Boolean).join(" ");
+}
+
+/** Endereço montado em uma linha, na ordem em que se escreve num envelope. */
+function addressLine(record: ExternalPatientRecord): string {
+  const street = [record.address, record.addressNumber].filter(Boolean).join(", ");
+  const unit = [record.complement, record.unit ? `apto/casa ${record.unit}` : "", record.floor ? `${record.floor}º andar` : ""].filter(Boolean).join(", ");
+  const building = [record.buildingName, record.block ? `bloco ${record.block}` : ""].filter(Boolean).join(", ");
+  const city = [record.city, record.state].filter(Boolean).join("/");
+  return [street, unit, building, record.neighborhood, city, record.postalCode ? `CEP ${record.postalCode}` : ""].filter(Boolean).join(" · ");
+}
+
+/** Situação e tempo de casa, no cabeçalho da ficha. */
+function PatientHeadline({ record }: { record: ExternalPatientRecord }) {
+  const since = record.clientSince || record.createdAt;
+  return (
+    <span className="patient-headline">
+      {record.status === "active" ? (
+        <span className="status-badge status-active">Ativo</span>
+      ) : (
+        <span className="status-badge status-inactive">{record.inactiveAt ? `Inativo desde ${fullDate(record.inactiveAt)}` : "Inativo"}</span>
+      )}
+      <span>Cliente desde {monthYear(since)}</span>
+    </span>
+  );
+}
+
+function RecordCard({ title, icon, rows, wide = false, children }: { title: string; icon: ReactNode; rows: Row[]; wide?: boolean; children?: ReactNode }) {
+  const filled = rows.filter(([, value]) => value);
+  if (filled.length === 0 && !children) return null;
+  return (
+    <div className={`record-card${wide ? " record-card-wide" : ""}`}>
+      <h4>
+        <span aria-hidden>{icon}</span> {title}
+      </h4>
+      {filled.length ? (
+        <dl className="record-grid">
+          {filled.map(([label, value]) => (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+      {children}
+    </div>
+  );
 }
 
 function PatientRecordView({ record }: { record: ExternalPatientRecord }) {
-  const groups = recordGroups
-    .map((group) => ({ ...group, values: group.fields.map((field) => [field, recordValue(record, field)] as const).filter(([, value]) => value) }))
-    .filter((group) => group.values.length > 0 || group.title === "Cadastro");
+  const age = record.birthDate ? ageOf(record.birthDate) : null;
+  const address = addressLine(record);
   return (
     <>
       <div className="record-groups">
-        {groups.map((group) => (
-          <div key={group.title} className="record-card">
-            <h4>
-              <span aria-hidden>{group.icon}</span> {group.title}
-            </h4>
-            <dl className="record-grid">
-              {group.values.map(([field, value]) => (
-                <div key={field}>
-                  <dt>{patientRecordLabels[field]}</dt>
-                  <dd>{value}</dd>
-                </div>
-              ))}
-              {group.title === "Cadastro" ? (
+        <RecordCard
+          title="Contato"
+          icon={<Phone size={14} />}
+          rows={[
+            ["Telefone", record.phone ? formatPhone(record.phone) : ""],
+            ["WhatsApp", record.whatsapp && record.whatsapp !== record.phone ? formatPhone(record.whatsapp) : ""],
+            ["E-mail", record.email ?? ""],
+            ["Em emergência, falar com", personLine(record.emergencyContactName, record.emergencyContactPhone)],
+            ["Responsável", personLine(record.guardianName, record.guardianPhone)],
+          ]}
+        />
+        <RecordCard
+          title="Sobre o cliente"
+          icon={<User size={14} />}
+          rows={[
+            [
+              "Nascimento",
+              record.birthDate ? (
                 <>
-                  <div>
-                    <dt>Filiais</dt>
-                    <dd>{record.branches.length ? record.branches.map((branch) => branch.name).join(", ") : "—"}</dd>
-                  </div>
-                  <div>
-                    <dt>Cadastrado em</dt>
-                    <dd>{fullDate(record.createdAt)}</dd>
-                  </div>
+                  <span>{fullDate(record.birthDate)}</span>
+                  {age !== null ? <span className="muted"> · {plural(age, "ano", "anos")}</span> : null}
                 </>
-              ) : null}
-            </dl>
-          </div>
-        ))}
+              ) : (
+                ""
+              ),
+            ],
+            ["CPF", record.cpf ?? ""],
+            ["Apelido", record.nickname ?? ""],
+            ["Gênero", record.gender ? (genderLabels[record.gender] ?? record.gender) : ""],
+            ["Profissão", record.occupation ?? ""],
+          ]}
+        />
+        <RecordCard
+          title="Relação com o estúdio"
+          icon={<CalendarDays size={14} />}
+          rows={[
+            [record.branches.length > 1 ? "Unidades" : "Unidade", record.branches.map((branch) => branch.name).join(", ") || "—"],
+            ["Como conheceu", record.source ?? ""],
+            ["Nível", record.level ?? ""],
+            ["Interesses", (record.interests ?? []).join(", ")],
+            ["Desconto", discountText(record)],
+            ["Uso de imagem", record.imageConsent === undefined ? "" : record.imageConsent ? "Autorizado" : "Não autorizado"],
+          ]}
+        />
+        {address || record.referencePoint ? (
+          <RecordCard title="Endereço" icon={<MapPin size={14} />} rows={[]} wide>
+            <p className="record-address">
+              {address ? <span>{address}</span> : null}
+              {record.residenceType ? <small className="muted">{residenceTypeLabels[record.residenceType] ?? record.residenceType}</small> : null}
+              {record.referencePoint ? <small className="muted">Ponto de referência: {record.referencePoint}</small> : null}
+            </p>
+          </RecordCard>
+        ) : null}
       </div>
       <div className="record-lists">
         <div className="record-card">
@@ -215,7 +269,7 @@ function PatientRecordView({ record }: { record: ExternalPatientRecord }) {
               {record.activePlans.map((plan) => (
                 <li key={plan.id}>
                   {plan.name}
-                  <small className="muted">{plan.validUntil ? `até ${shortDate(plan.validUntil)}` : `desde ${shortDate(plan.validFrom)}`}</small>
+                  <small className="muted">{plan.validUntil ? `válido até ${shortDate(plan.validUntil)}` : `desde ${shortDate(plan.validFrom)}`}</small>
                 </li>
               ))}
             </ul>
@@ -225,7 +279,7 @@ function PatientRecordView({ record }: { record: ExternalPatientRecord }) {
         </div>
         <div className="record-card">
           <h4>
-            <UserRound size={14} aria-hidden /> Turmas
+            <UserRound size={14} aria-hidden /> Turmas em que está
           </h4>
           {record.groups.length ? (
             <ul className="record-list" aria-label="Turmas do cliente">
@@ -255,7 +309,14 @@ interface HistoryFilters {
   to: string;
 }
 
-const emptyHistoryFilters: HistoryFilters = { status: "", origin: "", scope: "", dateField: "due", from: "", to: "" };
+const emptyHistoryFilters: HistoryFilters = {
+  status: "",
+  origin: "",
+  scope: "",
+  dateField: "due",
+  from: "",
+  to: "",
+};
 
 function historyPath(patientId: string, filters: HistoryFilters): string {
   const query = new URLSearchParams();
@@ -284,63 +345,87 @@ function PaymentHistory({ patientId }: { patientId: string }) {
   return (
     <>
       <div className="payment-filters" role="group" aria-label="Filtros do histórico">
-        <select aria-label="Situação" value={filters.status} onChange={(event) => set({ status: event.target.value })}>
-          <option value="">Todas as situações</option>
-          {paymentStatusFilters.map((status) => (
-            <option key={status} value={status}>
-              {paymentStatusFilterLabels[status]}
-            </option>
-          ))}
-        </select>
-        <select aria-label="Origem" value={filters.origin} onChange={(event) => set({ origin: event.target.value })}>
-          <option value="">Todas as origens</option>
-          {paymentOrigins.map((origin) => (
-            <option key={origin} value={origin}>
-              {paymentOriginLabels[origin]}
-            </option>
-          ))}
-        </select>
-        <select aria-label="Serviço ou linha" value={filters.scope} onChange={(event) => set({ scope: event.target.value })}>
-          <option value="">Todos os serviços e linhas</option>
-          <optgroup label="Linhas">
-            {lineKeys.map((line) => (
-              <option key={line} value={`line:${line}`}>
-                {lineKeyLabels[line]}
-              </option>
-            ))}
-          </optgroup>
-          {lineKeys.map((line: LineKey) => {
-            const ofLine = services.filter((service) => service.line === line);
-            return ofLine.length ? (
-              <optgroup key={line} label={`Serviços — ${lineKeyLabels[line]}`}>
-                {ofLine.map((service) => (
-                  <option key={service.id} value={`service:${service.id}`}>
-                    {service.active ? service.name : `${service.name} (inativo)`}
+        <div className="filter-row">
+          <label className="filter-field">
+            <span>Situação</span>
+            <select aria-label="Situação" value={filters.status} onChange={(event) => set({ status: event.target.value })}>
+              <option value="">Todas as situações</option>
+              {paymentStatusFilters.map((status) => (
+                <option key={status} value={status}>
+                  {paymentStatusFilterLabels[status]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="filter-field">
+            <span>Origem</span>
+            <select aria-label="Origem" value={filters.origin} onChange={(event) => set({ origin: event.target.value })}>
+              <option value="">Todas as origens</option>
+              {paymentOrigins.map((origin) => (
+                <option key={origin} value={origin}>
+                  {paymentOriginLabels[origin]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="filter-field filter-field-wide">
+            <span>Serviço ou linha</span>
+            <select aria-label="Serviço ou linha" value={filters.scope} onChange={(event) => set({ scope: event.target.value })}>
+              <option value="">Todos os serviços e linhas</option>
+              <optgroup label="Linhas">
+                {lineKeys.map((line) => (
+                  <option key={line} value={`line:${line}`}>
+                    {lineKeyLabels[line]}
                   </option>
                 ))}
               </optgroup>
-            ) : null;
-          })}
-        </select>
-        <select aria-label="Período pelo" value={filters.dateField} onChange={(event) => set({ dateField: event.target.value as HistoryFilters["dateField"] })}>
-          <option value="due">Vencimento</option>
-          <option value="paid">Pagamento</option>
-        </select>
-        <div className="period-field">
-          <label className="inline-field">
-            De
-            <input type="date" aria-label="De" value={filters.from} max={filters.to || undefined} onChange={(event) => set({ from: event.target.value })} />
-          </label>
-          <label className="inline-field">
-            Até
-            <input type="date" aria-label="Até" value={filters.to} min={filters.from || undefined} onChange={(event) => set({ to: event.target.value })} />
+              {lineKeys.map((line: LineKey) => {
+                const ofLine = services.filter((service) => service.line === line);
+                return ofLine.length ? (
+                  <optgroup key={line} label={`Serviços — ${lineKeyLabels[line]}`}>
+                    {ofLine.map((service) => (
+                      <option key={service.id} value={`service:${service.id}`}>
+                        {service.active ? service.name : `${service.name} (inativo)`}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null;
+              })}
+            </select>
           </label>
         </div>
-        {filtered ? (
-          <button type="button" className="link-button payment-filters-clear" onClick={() => setFilters(emptyHistoryFilters)}>
-            Limpar filtros
-          </button>
-        ) : null}
+        <div className="filter-row">
+          <label className="filter-field">
+            <span>Período</span>
+            <select
+              aria-label="Período pelo"
+              value={filters.dateField}
+              onChange={(event) =>
+                set({
+                  dateField: event.target.value as HistoryFilters["dateField"],
+                })
+              }
+            >
+              <option value="due">Por data de vencimento</option>
+              <option value="paid">Por data de pagamento</option>
+            </select>
+          </label>
+          <label className="filter-field">
+            <span>De</span>
+            <input type="date" aria-label="De" value={filters.from} max={filters.to || undefined} onChange={(event) => set({ from: event.target.value })} />
+          </label>
+          <label className="filter-field">
+            <span>Até</span>
+            <input type="date" aria-label="Até" value={filters.to} min={filters.from || undefined} onChange={(event) => set({ to: event.target.value })} />
+          </label>
+          <div className="filter-field filter-field-action">
+            {filtered ? (
+              <button type="button" className="secondary-button small" onClick={() => setFilters(emptyHistoryFilters)}>
+                Limpar filtros
+              </button>
+            ) : null}
+          </div>
+        </div>
       </div>
       {invalidPeriod ? <p className="form-error">A data inicial precisa ser anterior à final.</p> : null}
       {!invalidPeriod && history.error ? <ErrorBanner message={history.error} onRetry={history.reload} /> : null}

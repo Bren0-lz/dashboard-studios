@@ -62,7 +62,7 @@ describe("ficha do cliente (PT8)", () => {
 
     const record = within(modal).getByRole("region", { name: "Dados do cliente" });
     expect(await within(record).findByText("12/04/1988")).toBeInTheDocument();
-    expect(record).toHaveTextContent("Contato de emergência");
+    expect(record).toHaveTextContent("Em emergência, falar com");
     expect(record).toHaveTextContent("João Souza");
     expect(record).toHaveTextContent("(11) 98888-7777");
     expect(within(record).getByRole("list", { name: "Etiquetas" })).toHaveTextContent("Pagamento atrasado");

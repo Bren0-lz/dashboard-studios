@@ -465,6 +465,7 @@ a {
   overflow: hidden;
 }
 .occupancy-fill {
+  display: block;
   width: var(--fill);
   height: 100%;
   border-radius: 999px;
@@ -883,25 +884,25 @@ button:disabled {
 .groups-table {
   table-layout: fixed;
   /* Soma das colunas fixas + 200px para os horários, que ficam com o resto da largura. */
-  min-width: 844px;
+  min-width: 876px;
 }
 .groups-table.with-overdue {
-  min-width: 1004px;
+  min-width: 1036px;
 }
 .groups-table.with-actions {
-  min-width: 980px;
+  min-width: 1012px;
 }
 .groups-table.with-overdue.with-actions {
-  min-width: 1140px;
+  min-width: 1172px;
 }
 .groups-table .col-group {
   width: 180px;
 }
 .groups-table .col-enrolled {
-  width: 104px;
+  width: 124px;
 }
 .groups-table .col-free {
-  width: 88px;
+  width: 100px;
 }
 .groups-table .col-overdue {
   width: 160px;
@@ -929,6 +930,10 @@ button:disabled {
 .groups-table thead th,
 .groups-table thead th.num {
   white-space: normal;
+}
+/* Respiro entre cabeçalhos numéricos vizinhos ("Matriculados" e "Vagas disponíveis"). */
+.groups-table thead th.num {
+  padding-left: var(--space-4);
 }
 .groups-table .groups-table-schedule {
   min-width: 180px;
@@ -969,6 +974,7 @@ button:disabled {
   gap: var(--space-1);
 }
 .members-toggle .occupancy-track {
+  display: block;
   flex: none;
   width: 64px;
   height: 4px;
@@ -1158,6 +1164,7 @@ button.member-card:hover strong {
 }
 .overlay-center {
   z-index: 30;
+  overscroll-behavior: contain;
   align-items: center;
   justify-content: center;
   padding: var(--space-4);
@@ -1362,6 +1369,7 @@ button.member-card:hover strong {
   background: var(--paper);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
+  overscroll-behavior: contain;
   animation: modal-in 0.18s ease-out;
 }
 .modal-md {
@@ -1388,15 +1396,49 @@ button.member-card:hover strong {
 }
 /* Blocos da ficha em duas colunas que se encaixam pela altura (sem buracos). */
 .record-groups {
-  columns: 2;
-  column-gap: var(--space-3);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3);
+  align-items: start;
 }
-.record-groups > .record-card {
-  break-inside: avoid;
-  margin-bottom: var(--space-3);
+.record-card-wide {
+  grid-column: 1 / -1;
 }
-.record-groups > .record-card:last-child {
-  margin-bottom: 0;
+.record-groups .record-grid {
+  grid-template-columns: 1fr;
+}
+.record-address {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  font-weight: 500;
+}
+.record-address small {
+  font-size: var(--text-xs);
+  font-weight: 400;
+}
+.patient-headline {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: 2px;
+}
+.status-badge {
+  display: inline-block;
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.status-active {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+.status-inactive {
+  background: var(--other-bg);
+  color: var(--other);
 }
 .record-card {
   padding: var(--space-3) var(--space-4) var(--space-4);
@@ -1478,11 +1520,10 @@ button.member-card:hover strong {
   font-size: var(--text-xs);
 }
 .payment-filters {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-4);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: var(--surface-2);
@@ -1496,20 +1537,35 @@ button.member-card:hover strong {
   border-radius: var(--radius-sm);
   background: #fff;
 }
-/* Período "De / Até" num único bloco que ocupa duas trilhas da grade. */
-.period-field {
-  grid-column: span 2;
+/* Filtros do histórico em duas linhas: o quê (situação, origem, serviço) e quando (período). */
+.filter-row {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-2);
+  grid-template-columns: 1fr 1fr 1.6fr;
+  gap: var(--space-2) var(--space-3);
+  align-items: end;
 }
-.period-field .inline-field {
+.filter-row + .filter-row {
+  grid-template-columns: 1.4fr 1fr 1fr auto;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
   min-width: 0;
-  color: var(--muted);
 }
-.payment-filters-clear {
-  justify-self: end;
-  grid-column: -2 / -1;
+.filter-field > span {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.filter-field-action {
+  min-width: 120px;
+  align-items: flex-end;
+}
+.filter-field-action .small {
+  min-height: 38px;
 }
 .payment-totals {
   display: grid;
@@ -2701,12 +2757,12 @@ button.member-card:hover strong {
   .payment-filters {
     grid-template-columns: 1fr;
   }
-  .period-field,
-  .payment-filters-clear {
-    grid-column: auto;
+  .filter-row,
+  .filter-row + .filter-row {
+    grid-template-columns: 1fr;
   }
-  .record-groups {
-    columns: 1;
+  .filter-field-action {
+    align-items: stretch;
   }
   .group-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));

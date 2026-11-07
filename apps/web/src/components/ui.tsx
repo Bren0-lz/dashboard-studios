@@ -132,6 +132,7 @@ export function Modal({
   size?: "sm" | "md" | "lg";
 }) {
   useEscape(onClose, busy);
+  useBodyScrollLock();
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     ref.current?.querySelector<HTMLElement>("input, select, textarea, button:not(.icon-button)")?.focus();
@@ -178,6 +179,32 @@ export function ConfirmDialog({ title, message, confirmLabel, busy, error, onCon
 }
 
 const stack: (() => void)[] = [];
+
+/** Modais abertos agora; enquanto houver algum, a página de trás não rola. */
+let openModals = 0;
+let previousBody: { overflow: string; paddingRight: string } | null = null;
+
+function useBodyScrollLock() {
+  useEffect(() => {
+    if (openModals === 0) {
+      const body = document.body;
+      previousBody = { overflow: body.style.overflow, paddingRight: body.style.paddingRight };
+      // Compensa a barra de rolagem que some, para a página não "pular" para o lado.
+      const scrollbar = window.innerWidth - document.documentElement.clientWidth;
+      body.style.overflow = "hidden";
+      if (scrollbar > 0) body.style.paddingRight = `${scrollbar}px`;
+    }
+    openModals += 1;
+    return () => {
+      openModals -= 1;
+      if (openModals === 0 && previousBody) {
+        document.body.style.overflow = previousBody.overflow;
+        document.body.style.paddingRight = previousBody.paddingRight;
+        previousBody = null;
+      }
+    };
+  }, []);
+}
 
 /** Esc fecha só o de cima. */
 function useEscape(onClose: () => void, busy: boolean) {
