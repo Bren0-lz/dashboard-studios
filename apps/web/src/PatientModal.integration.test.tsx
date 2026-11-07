@@ -154,12 +154,11 @@ describe("ficha do cliente (PT8)", () => {
     expect(within(modal).getByLabelText("Totais do histórico")).toHaveTextContent("Cobranças0");
   });
 
-  it("abre a ficha pelo nome no modal da turma (cartões), sobre a turma; Esc fecha só a ficha", async () => {
+  it("abre a ficha pelo nome no modal da turma, sobre a turma; Esc fecha só a ficha", async () => {
     await startServer();
     const user = userEvent.setup();
     renderAt("/turmas");
     await login(user);
-    await user.click(await screen.findByRole("button", { name: "Cartões" }));
     await user.click(await screen.findByRole("button", { name: GROUP }));
     const groupModal = await screen.findByRole("dialog", { name: GROUP });
     await user.click(await within(groupModal).findByRole("button", { name: NAME }));

@@ -13,7 +13,6 @@ import {
   type GroupRow,
   type GroupsResponse,
 } from "@dash/shared";
-import { GroupCard } from "../components/GroupCard";
 import { BranchSelect } from "../components/Layout";
 import { canOpenPatient, PatientModal, type PatientRef } from "../components/PatientModal";
 import { EmptyState, ErrorBanner, Kpi, MemberOverdueMark, Notice, PageHeader, Skeleton } from "../components/ui";
@@ -32,17 +31,12 @@ interface Filters {
 
 const emptyFilters: Filters = { weekday: "", period: "", professional: "", onlyFree: false, onlyOverdue: false };
 
-/** A tabela é a exibição padrão (pedido do dono, 07/11); os cartões ficam na alternância. */
-type View = "cards" | "table";
-const defaultView: View = "table";
-
 export function GroupsPage() {
   const [filter] = usePanelFilter();
   const { session } = useSession();
   const groups = useRemote<GroupsResponse>(withFilter("/groups", filter));
   const flow = useGroupFlow(groups.data?.features.planSale ?? false, groups.reload);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
-  const [view, setView] = useState<View>(defaultView);
   const data = groups.data;
 
   const professionals = useMemo(() => [...new Map((data?.groups ?? []).map((group) => [group.professionalId, group.professionalName])).entries()], [data]);
@@ -124,30 +118,12 @@ export function GroupsPage() {
                   Limpar filtros
                 </button>
               ) : null}
-              <div className="segmented list-toolbar-end" role="group" aria-label="Exibição">
-                {(
-                  [
-                    ["cards", "Cartões"],
-                    ["table", "Tabela"],
-                  ] as const
-                ).map(([value, label]) => (
-                  <button key={value} type="button" className={view === value ? "active" : ""} aria-pressed={view === value} onClick={() => setView(value)}>
-                    {label}
-                  </button>
-                ))}
-              </div>
             </div>
             {rows.length === 0 ? (
               <EmptyState
                 title={filtered ? "Nenhuma turma com esses filtros" : "Nenhuma turma ativa"}
                 hint={filtered ? "Limpe os filtros para ver todas as turmas." : "Cadastre as turmas no CRM para vender as vagas por aqui."}
               />
-            ) : view === "cards" ? (
-              <div className="group-cards">
-                {rows.map((group) => (
-                  <GroupCard key={group.id} group={group} showOverdue={showOverdue} canEnroll={canEnroll} onOpen={() => flow.open(group.id)} onEnroll={() => flow.enroll(group)} />
-                ))}
-              </div>
             ) : (
               <div className="table-wrap">
                 {/* Larguras fixas (`table-layout: fixed` + `colgroup`): abrir a lista de matriculados não mexe nas colunas. */}
@@ -229,7 +205,7 @@ export function GroupsPage() {
                 </table>
               </div>
             )}
-            {rows.length > 0 && view === "table" ? (
+            {rows.length > 0 ? (
               <p className="groups-table-note muted">
                 Valores por mês. O faturamento atual soma, para cada matriculado, o valor por sessão do plano ativo que cobre o serviço da turma multiplicado pelos encontros do mês
                 (horários semanais × 4). O potencial acrescenta as vagas disponíveis pelo valor médio dos matriculados com plano (sem nenhum, pelo preço avulso do serviço).

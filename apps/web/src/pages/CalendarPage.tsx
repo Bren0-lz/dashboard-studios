@@ -94,7 +94,7 @@ function Members({ group, max, size = "sm" }: { group: GroupRow; max: number; si
   const names = group.memberNames;
   if (!names) return null;
   if (names.length === 0) return <span className="calendar-members-empty">Nenhum aluno ainda</span>;
-  return <MemberAvatars names={names} groupName={group.name} max={max} size={size} />;
+  return <MemberAvatars names={names} max={max} size={size} />;
 }
 
 export function CalendarPage() {

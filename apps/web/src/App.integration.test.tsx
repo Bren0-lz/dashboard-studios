@@ -20,9 +20,10 @@ async function login(user: ReturnType<typeof userEvent.setup>, email = "admin@ar
   await user.click(screen.getByRole("button", { name: "Entrar" }));
 }
 
-/** A tela de turmas abre na tabela (PT7); os testes dos cartões trocam a exibição. */
-async function showCards(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(await screen.findByRole("button", { name: "Cartões" }));
+/** Linha da turma na tabela da tela de turmas, achada pelo botão com o nome da turma. */
+async function groupRow(name: string) {
+  const table = await screen.findByRole("table", { name: "Turmas" });
+  return (await within(table).findByRole("button", { name })).closest("tr")!;
 }
 
 beforeEach(() => {
@@ -68,22 +69,22 @@ describe("turmas", () => {
     const user = userEvent.setup();
     renderAt("/turmas");
     await login(user);
-    await showCards(user);
     await screen.findByRole("heading", { name: "Onde tenho vaga para vender?" });
     await user.click(screen.getByRole("button", { name: "Estética" }));
     await waitFor(() => expect(screen.queryByText("Pilates Ter/Qui 18h")).not.toBeInTheDocument());
     await user.click(screen.getByRole("button", { name: "Tudo" }));
-    const card = await screen.findByRole("article", { name: "Pilates Sáb 9h" });
-    expect(card).toHaveTextContent("2/8 · 6 vagas");
-    await user.click(within(card).getByRole("button", { name: /Inscrever/ }));
+    const row = await groupRow("Pilates Sáb 9h");
+    expect(row.querySelector('[data-label="Matriculados"]')).toHaveTextContent("2 de 8");
+    expect(row.querySelector('[data-label="Vagas disponíveis"]')).toHaveTextContent("6");
+    await user.click(within(row).getByRole("button", { name: /Inscrever/ }));
     const dialog = await screen.findByRole("dialog", { name: "Inscrever em Pilates Sáb 9h" });
     await user.type(within(dialog).getByLabelText("Buscar cliente"), "Clara");
     await user.click(await within(dialog).findByRole("button", { name: /Clara/ }));
     await user.click(within(dialog).getByRole("button", { name: "Confirmar inscrição" }));
     expect(await screen.findByText("Cliente inscrito na turma.")).toBeInTheDocument();
-    // O cache do servidor foi limpo na gravação: o cartão atualiza na hora.
-    await waitFor(() => expect(screen.getByRole("article", { name: "Pilates Sáb 9h" })).toHaveTextContent("3/8 · 5 vagas"));
-    expect(within(screen.getByRole("article", { name: "Pilates Sáb 9h" })).getAllByText(/^[A-ZÀ-Ú]{2}$/)).toHaveLength(3);
+    // O cache do servidor foi limpo na gravação: a linha atualiza na hora.
+    await waitFor(async () => expect((await groupRow("Pilates Sáb 9h")).querySelector('[data-label="Matriculados"]')).toHaveTextContent("3 de 8"));
+    expect((await groupRow("Pilates Sáb 9h")).querySelector('[data-label="Vagas disponíveis"]')).toHaveTextContent("5");
   });
 
   it("inscreve pela turma cheia e mostra a espera que vem do CRM", async () => {
@@ -91,59 +92,15 @@ describe("turmas", () => {
     const user = userEvent.setup();
     renderAt("/turmas");
     await login(user);
-    await showCards(user);
-    const card = await screen.findByRole("article", { name: "Pilates Seg/Qua 19h" });
-    expect(card).toHaveTextContent("6/6 · turma cheia");
-    await user.click(within(card).getByRole("button", { name: /Espera/ }));
+    const row = await groupRow("Pilates Seg/Qua 19h");
+    expect(row.querySelector('[data-label="Matriculados"]')).toHaveTextContent("6 de 6");
+    expect(row.querySelector('[data-label="Vagas disponíveis"]')).toHaveTextContent("0");
+    await user.click(within(row).getByRole("button", { name: /Espera/ }));
     const dialog = await screen.findByRole("dialog", { name: "Inscrever em Pilates Seg/Qua 19h" });
     await user.type(within(dialog).getByLabelText("Buscar cliente"), "Clara");
     await user.click(await within(dialog).findByRole("button", { name: /Clara/ }));
     await user.click(within(dialog).getByRole("button", { name: "Colocar na espera" }));
     expect(await screen.findByText(/^Turma cheia: o cliente entrou na lista de espera \(posição \d+\)\.$/)).toBeInTheDocument();
-  });
-
-  it("mostra os cartões com bolinhas de iniciais, +N e vagas", async () => {
-    await startServer();
-    const user = userEvent.setup();
-    renderAt("/turmas");
-    await login(user);
-    await showCards(user);
-    const big = await screen.findByRole("article", { name: "Dança Ter/Qui 19h" });
-    expect(big).toHaveTextContent("9/12 · 3 vagas");
-    const stack = within(big).getByRole("button", { name: "Ver alunos de Dança Ter/Qui 19h" });
-    expect(within(stack).getAllByText(/^[A-ZÀ-Ú]{2}$/)).toHaveLength(5);
-    expect(within(stack).getByText("+4")).toBeInTheDocument();
-    const small = screen.getByRole("article", { name: "Pilates Seg/Qua 7h" });
-    expect(within(small).getAllByText(/^[A-ZÀ-Ú]{2}$/)).toHaveLength(5);
-    expect(within(small).queryByText(/^\+\d+$/)).not.toBeInTheDocument();
-    await user.click(stack);
-    expect(await screen.findByRole("dialog", { name: "Dança Ter/Qui 19h" })).toBeInTheDocument();
-  });
-
-  it("com um CRM sem os nomes na lista, mostra os cartões sem bolinhas", async () => {
-    await startServer({ withoutMemberNames: true });
-    const user = userEvent.setup();
-    renderAt("/turmas");
-    await login(user);
-    await showCards(user);
-    const card = await screen.findByRole("article", { name: "Dança Ter/Qui 19h" });
-    expect(card).toHaveTextContent("9/12 · 3 vagas");
-    expect(within(card).queryByRole("button", { name: /^Ver alunos de/ })).not.toBeInTheDocument();
-    expect(within(card).queryByText(/^[A-ZÀ-Ú]{2}$/)).not.toBeInTheDocument();
-  });
-
-  it("abre o modal da turma, com os inadimplentes marcados, pelo \"Pagamentos atrasados\" do cartão", async () => {
-    await startServer();
-    const user = userEvent.setup();
-    renderAt("/turmas");
-    await login(user);
-    await showCards(user);
-    const card = await screen.findByRole("article", { name: "Pilates Ter/Qui 18h" });
-    const overdue = within(card).getByRole("button", { name: /Pagamentos atrasados: \d+ clientes? · R\$/ });
-    const count = Number(/(\d+) clientes?/.exec(overdue.textContent ?? "")?.[1]);
-    await user.click(overdue);
-    const modal = await screen.findByRole("dialog", { name: "Pilates Ter/Qui 18h" });
-    expect(await within(modal).findAllByText(/^Inadimplente · R\$ [\d.,]+ · há \d+ dias?$/)).toHaveLength(count);
   });
 
   it("abre o modal com os alunos, telefone e WhatsApp", async () => {
@@ -234,18 +191,15 @@ describe("tabela de turmas (PT7)", () => {
   const groupRowOf = (table: HTMLElement, name: string) => within(table).getByRole("button", { name }).closest("tr")!;
   const cellsOf = (row: HTMLElement) => [...row.children].map((cell) => `${cell.tagName}:${cell.getAttribute("data-label") ?? ""}`);
 
-  it("abre na tabela por padrão, com os cartões na alternância", async () => {
+  it("mostra as turmas só em tabela, sem alternância de exibição", async () => {
     await startServer();
     const user = userEvent.setup();
     renderAt("/turmas");
     await login(user);
     expect(await screen.findByRole("table", { name: "Turmas" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Tabela" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "Cartões" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByRole("group", { name: "Exibição" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cartões" })).not.toBeInTheDocument();
     expect(screen.queryByRole("article")).not.toBeInTheDocument();
-    await showCards(user);
-    expect(await screen.findByRole("article", { name: "Pilates Ter/Qui 18h" })).toBeInTheDocument();
-    expect(screen.queryByRole("table", { name: "Turmas" })).not.toBeInTheDocument();
   });
 
   it("com finance.view, marca o inadimplente na lista de matriculados da tabela e no modal", async () => {
@@ -396,7 +350,7 @@ describe("espera e calendário", () => {
     await login(user);
     const week = await screen.findByRole("region", { name: "Agenda da semana" });
     expect(screen.getByRole("button", { name: "Semana" })).toHaveClass("active");
-    // Os cartões da semana mostram as bolinhas com as iniciais dos alunos, como no cartão da turma.
+    // Os cartões da semana mostram as bolinhas com as iniciais dos alunos.
     await waitFor(() => expect(week.querySelectorAll(".week-appointment .avatar").length).toBeGreaterThan(0));
     await user.click(screen.getByRole("button", { name: "Mês" }));
     expect(await screen.findByText("Seg", { selector: ".month-weekdays span" })).toBeInTheDocument();
@@ -416,17 +370,16 @@ describe("filtro por linha e por serviço (PT6)", () => {
     const user = userEvent.setup();
     renderAt("/turmas");
     await login(user);
-    await showCards(user);
-    expect(await screen.findByRole("article", { name: "Pilates Ter/Qui 18h" })).toBeInTheDocument();
+    expect(await groupRow("Pilates Ter/Qui 18h")).toBeInTheDocument();
     expect(screen.getByRole("group", { name: "Linha de negócio" })).toHaveTextContent("TudoStudioEstéticaOutros");
     await openServices(user);
     const menu = screen.getByRole("group", { name: "Serviços" });
     expect(within(menu).getByRole("group", { name: "Outros" })).toHaveTextContent("Avaliação funcional");
     await user.click(within(menu).getByRole("checkbox", { name: "Pilates Solo (inativo)" }));
     await user.click(within(menu).getByRole("checkbox", { name: "Dançaterapia" }));
-    await waitFor(() => expect(screen.queryByRole("article", { name: "Pilates Ter/Qui 18h" })).not.toBeInTheDocument());
-    expect(await screen.findByRole("article", { name: "Pilates Solo Sex 10h" })).toBeInTheDocument();
-    expect(screen.getByRole("article", { name: "Dança Ter/Qui 19h" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Pilates Ter/Qui 18h" })).not.toBeInTheDocument());
+    expect(await groupRow("Pilates Solo Sex 10h")).toBeInTheDocument();
+    expect(await groupRow("Dança Ter/Qui 19h")).toBeInTheDocument();
     expect(screen.getByText("Serviços (2)", { selector: "summary" })).toBeInTheDocument();
 
     // A escolha vai na URL e acompanha a navegação.
