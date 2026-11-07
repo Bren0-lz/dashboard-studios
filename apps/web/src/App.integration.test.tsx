@@ -394,8 +394,10 @@ describe("espera e calendário", () => {
     const user = userEvent.setup();
     renderAt("/calendario");
     await login(user);
-    expect(await screen.findByRole("region", { name: "Agenda da semana" })).toBeInTheDocument();
+    const week = await screen.findByRole("region", { name: "Agenda da semana" });
     expect(screen.getByRole("button", { name: "Semana" })).toHaveClass("active");
+    // Os cartões da semana mostram as bolinhas com as iniciais dos alunos, como no cartão da turma.
+    await waitFor(() => expect(week.querySelectorAll(".week-appointment .avatar").length).toBeGreaterThan(0));
     await user.click(screen.getByRole("button", { name: "Mês" }));
     expect(await screen.findByText("Seg", { selector: ".month-weekdays span" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Dia" }));

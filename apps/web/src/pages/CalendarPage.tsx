@@ -3,6 +3,7 @@ import { useMemo, useState, type CSSProperties } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   addDays,
+  initials,
   monthEnd,
   monthStart,
   occupancyHeatmap,
@@ -16,6 +17,7 @@ import {
   type GroupRow,
   type GroupsResponse,
 } from "@dash/shared";
+import { MemberAvatars } from "../components/MemberAvatars";
 import { EmptyState, ErrorBanner, Modal, PageHeader, Skeleton } from "../components/ui";
 import { usePanelFilter, withFilter } from "../lib/filters";
 import { useGroupFlow } from "../lib/useGroupFlow";
@@ -75,16 +77,6 @@ function minutesOf(time: string) {
   return Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
 }
 
-function initials(name: string) {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
-}
-
 function colorStyle(color: string | undefined): CSSProperties | undefined {
   return color ? ({ "--pro-color": color } as CSSProperties) : undefined;
 }
@@ -95,6 +87,14 @@ function toneClass(group: GroupRow) {
 
 function seatsLabel(group: GroupRow) {
   return `${group.enrolled}/${group.capacity} alunos${group.waitlistCount > 0 ? ` · ${group.waitlistCount} na espera` : ""}`;
+}
+
+/** Bolinhas dos alunos nos cartões do calendário (só visuais: o cartão inteiro já abre a turma). */
+function Members({ group, max, size = "sm" }: { group: GroupRow; max: number; size?: "sm" | "md" }) {
+  const names = group.memberNames;
+  if (!names) return null;
+  if (names.length === 0) return <span className="calendar-members-empty">Nenhum aluno ainda</span>;
+  return <MemberAvatars names={names} groupName={group.name} max={max} size={size} />;
 }
 
 export function CalendarPage() {
@@ -387,21 +387,33 @@ export function CalendarPage() {
 function WeekCard({ session, color, onOpen }: { session: Session; color: string | undefined; onOpen: (id: string) => void }) {
   const { group } = session;
   return (
-    <button type="button" className={`week-appointment group-class ${toneClass(group)}`} style={colorStyle(color)} aria-label={`${group.name}, ${session.startTime} a ${session.endTime}`} onClick={() => onOpen(group.id)}>
-      <i className="pro-dot" aria-hidden="true" />
-      <time>
+    <button
+      type="button"
+      className={`week-appointment group-class ${toneClass(group)}`}
+      style={colorStyle(color)}
+      aria-label={`${group.name}, ${session.startTime} a ${session.endTime}, ${seatsLabel(group)}`}
+      onClick={() => onOpen(group.id)}
+    >
+      <time className="week-appointment-time">
         {session.startTime}–{session.endTime}
       </time>
       <strong className="group-name" title={group.name}>
         {group.name}
       </strong>
-      <span>
+      <span className="week-appointment-meta">
         {group.professionalName} · {group.roomName}
       </span>
-      <span className="week-appointment-seats">
-        {seatsLabel(group)}
-        {group.waitlistCount > 0 ? <Clock3 size={12} aria-hidden /> : null}
+      <span className="week-appointment-foot">
+        <Members group={group} max={4} />
+        <span className="week-appointment-seats">
+          {group.enrolled}/{group.capacity}
+        </span>
       </span>
+      {group.waitlistCount > 0 ? (
+        <span className="week-appointment-waitlist">
+          <Clock3 size={12} aria-hidden /> {group.waitlistCount} na espera
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -424,8 +436,12 @@ function DayCard({ session, color, onOpen }: { session: Session; color: string |
             {group.name}
           </h3>
           <p>
-            {group.professionalName} · {group.roomName} · {seatsLabel(group)}
+            {group.professionalName} · {group.roomName}
           </p>
+          <div className="agenda-card-members">
+            <Members group={group} max={8} size="md" />
+            <span className="agenda-card-seats">{seatsLabel(group)}</span>
+          </div>
         </div>
         <button type="button" className="secondary-button" onClick={() => onOpen(group.id)}>
           Abrir turma
@@ -541,7 +557,12 @@ function DayScheduleGrid({ sessions, professionals, onOpen }: { sessions: Sessio
                             {session.group.name}
                           </strong>
                           <span>{session.group.roomName}</span>
-                          <span>{seatsLabel(session.group)}</span>
+                          <span className="day-grid-event-foot">
+                            <Members group={session.group} max={4} />
+                            <span>
+                              {session.group.enrolled}/{session.group.capacity}
+                            </span>
+                          </span>
                         </button>
                       ))}
                     </td>
@@ -593,6 +614,7 @@ function DayEventsModal({
                     <small>
                       {session.group.professionalName} · {session.group.roomName} · {seatsLabel(session.group)}
                     </small>
+                    <Members group={session.group} max={6} />
                   </span>
                 </button>
               </li>
