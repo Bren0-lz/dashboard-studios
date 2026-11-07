@@ -1,5 +1,6 @@
 import { AlertCircle, UserPlus } from "lucide-react";
-import { formatMoney, initials, memberBubbles, plural, seatsLabel, slotLabel, type GroupRow } from "@dash/shared";
+import { formatMoney, plural, seatsLabel, slotLabel, type GroupRow } from "@dash/shared";
+import { MemberAvatars } from "./MemberAvatars";
 import { LinePill } from "./ui";
 
 /**
@@ -8,7 +9,6 @@ import { LinePill } from "./ui";
  */
 export function GroupCard({ group, showOverdue, canEnroll, onOpen, onEnroll }: { group: GroupRow; showOverdue: boolean; canEnroll: boolean; onOpen: () => void; onEnroll: () => void }) {
   const names = group.memberNames;
-  const bubbles = names ? memberBubbles(names) : null;
   return (
     <article className="group-card" aria-label={group.name}>
       <header className="group-card-head">
@@ -24,15 +24,8 @@ export function GroupCard({ group, showOverdue, canEnroll, onOpen, onEnroll }: {
       </header>
       <p className="group-card-schedule muted">{group.weeklySlots.length ? group.weeklySlots.map(slotLabel).join(", ") : "Horários ainda não definidos"}</p>
       <div className="group-card-members">
-        {bubbles && bubbles.shown.length > 0 ? (
-          <button type="button" className="avatar-stack" onClick={onOpen} aria-label={`Ver alunos de ${group.name}`}>
-            {bubbles.shown.map((name, index) => (
-              <span key={`${name}-${index}`} className="avatar" title={name}>
-                {initials(name)}
-              </span>
-            ))}
-            {bubbles.extra > 0 ? <span className="avatar avatar-more">+{bubbles.extra}</span> : null}
-          </button>
+        {names && names.length > 0 ? (
+          <MemberAvatars names={names} groupName={group.name} onOpen={onOpen} />
         ) : names ? (
           <span className="muted">Nenhum aluno ainda</span>
         ) : null}
