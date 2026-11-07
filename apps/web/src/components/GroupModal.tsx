@@ -51,7 +51,7 @@ function MemberName({ member, children, onSelect }: { member: ExternalGroupMembe
   );
 }
 
-/** Modal da turma: alunos com telefone e WhatsApp, selo de atraso, espera e ações. Usado nos cartões, na tabela e no calendário. */
+/** Modal da turma: alunos com telefone e WhatsApp, selo de atraso, espera e ações. Usado na tabela e no calendário. */
 export function GroupModal({ groupId, onClose, onEnroll, onChanged }: { groupId: string; onClose: () => void; onEnroll: (group: GroupRow | GroupDetailsResponse) => void; onChanged: () => void }) {
   const { session } = useSession();
   const details = useRemote<GroupDetailsResponse>(`/groups/${groupId}`);
