@@ -143,7 +143,7 @@ export function GroupsPage() {
                     <col className="col-free" />
                     {showOverdue ? <col className="col-overdue" /> : null}
                     <col className="col-money" />
-                    <col className="col-money" />
+                    <col className="col-potential" />
                     {canEnroll ? <col className="col-actions" /> : null}
                   </colgroup>
                   <thead>

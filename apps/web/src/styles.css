@@ -313,7 +313,7 @@ a {
   flex-direction: column;
   gap: var(--space-5);
   padding: var(--space-6) var(--space-6) var(--space-7);
-  max-width: 1440px;
+  max-width: 1920px;
 }
 .page-header {
   display: flex;
@@ -883,17 +883,17 @@ button:disabled {
    a linha da lista de matriculados (colSpan) entrava no cálculo das colunas e a tabela inteira "pulava". */
 .groups-table {
   table-layout: fixed;
-  /* Soma das colunas fixas + 200px para os horários, que ficam com o resto da largura. */
-  min-width: 876px;
+  /* Soma das colunas fixas + 170px para os horários, que ficam com o resto da largura. */
+  min-width: 846px;
 }
 .groups-table.with-overdue {
-  min-width: 1036px;
+  min-width: 1006px;
 }
 .groups-table.with-actions {
-  min-width: 1012px;
+  min-width: 982px;
 }
 .groups-table.with-overdue.with-actions {
-  min-width: 1172px;
+  min-width: 1142px;
 }
 .groups-table .col-group {
   width: 180px;
@@ -907,7 +907,8 @@ button:disabled {
 .groups-table .col-overdue {
   width: 160px;
 }
-.groups-table .col-money {
+.groups-table .col-money,
+.groups-table .col-potential {
   width: 136px;
 }
 .groups-table .col-actions {
@@ -934,6 +935,45 @@ button:disabled {
 /* Respiro entre cabeçalhos numéricos vizinhos ("Matriculados" e "Vagas disponíveis"). */
 .groups-table thead th.num {
   padding-left: var(--space-4);
+}
+/* Telas largas: colunas mais largas e títulos em uma linha só. Abaixo disso a tabela continua
+   cabendo sem rolar de lado, com os títulos quebrando em duas linhas. */
+@media (min-width: 1600px) {
+  .groups-table {
+    /* Soma das colunas fixas + 220px para os horários. */
+    min-width: 1062px;
+  }
+  .groups-table.with-overdue {
+    min-width: 1232px;
+  }
+  .groups-table.with-actions {
+    min-width: 1198px;
+  }
+  .groups-table.with-overdue.with-actions {
+    min-width: 1368px;
+  }
+  .groups-table .col-group {
+    width: 200px;
+  }
+  .groups-table .col-enrolled {
+    width: 132px;
+  }
+  .groups-table .col-free {
+    width: 160px;
+  }
+  .groups-table .col-overdue {
+    width: 170px;
+  }
+  .groups-table .col-money {
+    width: 160px;
+  }
+  .groups-table .col-potential {
+    width: 190px;
+  }
+  .groups-table thead th,
+  .groups-table thead th.num {
+    white-space: nowrap;
+  }
 }
 .groups-table .groups-table-schedule {
   min-width: 180px;
