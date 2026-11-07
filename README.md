@@ -26,7 +26,7 @@ externa. Cada tela responde a uma pergunta de venda e termina numa ação:
 | **Back-end / integração de sistemas** | Servidor Fastify no padrão **BFF** (_backend for frontend_) que consome a API do CRM, monta cada tela pronta e esconde as credenciais do navegador.                                                    |
 | **Dados e validação**                 | Respostas do CRM validadas com Zod ([`crm-schemas.ts`](packages/shared/src/crm-schemas.ts)); regras de negócio puras e testadas ([`rules.ts`](packages/shared/src/rules.ts)); exportação CSV.          |
 | **Segurança**                         | Sessão em cookie `httpOnly`/`SameSite`, proteção **CSRF** com comparação em tempo constante, chave da API só no servidor e ações filtradas pelas permissões do usuário no CRM.                        |
-| **Testes automatizados**              | 91 testes com Vitest: regras de negócio, BFF contra um CRM simulado e telas com Testing Library usando o BFF real em memória.                                                                          |
+| **Testes automatizados**              | 96 testes com Vitest: regras de negócio, BFF contra um CRM simulado e telas com Testing Library usando o BFF real em memória.                                                                          |
 | **Visualização de dados e design**    | Gráficos com Recharts, mapa de calor de ocupação, cores com significado fixo (ocupado, parcial, vazio, faixas de atraso) e os mesmos tokens visuais do CRM.                                            |
 
 ---

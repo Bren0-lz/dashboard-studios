@@ -12,5 +12,7 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./src/test-setup.ts"],
     testTimeout: 20_000,
+    // Deixa o teste ler o styles.css (`?raw`) para conferir regras de layout, como o `table-layout` da tabela de turmas.
+    css: { include: [/styles\.css/] },
   },
 });
