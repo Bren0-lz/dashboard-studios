@@ -453,6 +453,10 @@ describe("filtro por linha e por serviço (PT6)", () => {
     expect(await items(`servicos=${PILATES}`)).not.toContain("Meia antiderrapante");
     const csv = await session.get(`/api/sales.csv?${MONTH}&linha=studio`);
     expect(csv.body).toContain("Combo Pilates + Limpeza de pele;Plano;Studio, Estética");
+    // Plano avulso (vendido no agendamento) sai como "Plano avulso"; o serviço não se vende mais.
+    const otherCsv = await session.get(`/api/sales.csv?${MONTH}&linha=other`);
+    expect(otherCsv.body).toContain("Avaliação funcional;Plano avulso;");
+    expect(otherCsv.body).not.toContain(";Serviço;");
   });
 
   it("inadimplência pelos serviços e produtos das parcelas; sem vínculo, só em Tudo", async () => {

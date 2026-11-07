@@ -216,7 +216,7 @@ export function GroupsPage() {
             {rows.length > 0 ? (
               <p className="groups-table-note muted">
                 Valores por mês. O faturamento atual soma, para cada matriculado, o valor por sessão do plano ativo que cobre o serviço da turma multiplicado pelos encontros do mês
-                (horários semanais × 4). O potencial acrescenta as vagas disponíveis pelo valor médio dos matriculados com plano (sem nenhum, pelo preço avulso do serviço).
+                (horários semanais × 4). O potencial acrescenta as vagas disponíveis pelo valor médio dos matriculados com plano (sem nenhum, pelo valor por sessão do plano avulso do serviço).
               </p>
             ) : null}
           </section>

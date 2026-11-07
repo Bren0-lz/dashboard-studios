@@ -291,7 +291,7 @@ export function salesCsv(report: SalesResponse): string {
     sale.kind === "sale" ? "Venda" : "Cancelamento",
     sale.patientName,
     sale.itemName,
-    { plan: "Plano", product: "Produto", service: "Serviço" }[sale.sourceType],
+    sale.planKind === "single" ? "Plano avulso" : { plan: "Plano", product: "Produto", service: "Serviço (comanda antiga)" }[sale.sourceType],
     saleTags(sale)
       .lines.map((line) => lineKeyLabels[line])
       .join(", "),
