@@ -16,7 +16,7 @@ import {
 import { useSession } from "../lib/session";
 import { useAction } from "../lib/useAction";
 import { useRemote } from "../lib/useRemote";
-import { ConfirmDialog, EmptyState, ErrorBanner, LinePill, Modal, Notice, OccupancyBar, OverdueBadge, Skeleton, WhatsAppButton } from "./ui";
+import { ConfirmDialog, EmptyState, ErrorBanner, LinePill, MemberOverdueMark, Modal, Notice, OccupancyBar, Skeleton, WhatsAppButton } from "./ui";
 
 /** Número para o WhatsApp: o WhatsApp do cadastro e, sem ele, o telefone. Sem `patients.view` não vem nenhum. */
 const whatsappOf = (member: ExternalGroupMember) => member.whatsapp ?? member.phone;
@@ -98,7 +98,7 @@ export function GroupModal({ groupId, onClose, onEnroll, onChanged }: { groupId:
                   <div className="member-main">
                     <MemberName member={member} />
                     <span className="muted">{[contactLine(member), member.monthlyInCents !== null ? `${formatMoney(member.monthlyInCents)}/mês` : "sem plano ativo"].filter(Boolean).join(" · ")}</span>
-                    {member.overdue ? <OverdueBadge overdue={member.overdue} /> : null}
+                    {member.overdue && session.can.seeFinance ? <MemberOverdueMark overdue={member.overdue} /> : null}
                   </div>
                   <div className="member-actions">
                     <WhatsAppButton

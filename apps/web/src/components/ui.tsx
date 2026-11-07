@@ -1,12 +1,12 @@
-import { AlertTriangle, Inbox, MessageCircle, RefreshCw, X } from "lucide-react";
+import { AlertCircle, AlertTriangle, Inbox, MessageCircle, RefreshCw, X } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
 import {
   formatMoney,
   lineKeyLabels,
   lineKeyOf,
   occupancyTone,
-  overdueTone,
   plural,
+  shortDate,
   type BusinessLine,
   type MemberOverdue,
 } from "@dash/shared";
@@ -87,10 +87,14 @@ export function OccupancyBar({ enrolled, capacity, percent }: { enrolled: number
   );
 }
 
-export function OverdueBadge({ overdue }: { overdue: Pick<MemberOverdue, "daysOverdue" | "amountInCents"> }) {
+/**
+ * Marca de inadimplente do aluno (parcela vencida), no mesmo tom da coluna "Inadimplentes" da tabela de
+ * turmas: ícone + vermelho, com valor e dias. Só aparece para quem tem `finance.view` (o BFF tira o `overdue`).
+ */
+export function MemberOverdueMark({ overdue }: { overdue: MemberOverdue }) {
   return (
-    <span className={`overdue-badge tone-${overdueTone(overdue.daysOverdue)}`}>
-      Atrasado há {plural(overdue.daysOverdue, "dia", "dias")} · {formatMoney(overdue.amountInCents)}
+    <span className="icon-count text-bad member-overdue" title={`${plural(overdue.installments, "parcela vencida", "parcelas vencidas")} desde ${shortDate(overdue.oldestDueDate)}`}>
+      <AlertCircle size={14} aria-hidden /> Inadimplente · {formatMoney(overdue.amountInCents)} · há {plural(overdue.daysOverdue, "dia", "dias")}
     </span>
   );
 }

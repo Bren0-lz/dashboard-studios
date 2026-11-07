@@ -8,13 +8,14 @@ import {
   slotLabel,
   weekdayLong,
   type DayPeriod,
+  type ExternalGroupMember,
   type GroupDetailsResponse,
   type GroupRow,
   type GroupsResponse,
 } from "@dash/shared";
 import { GroupCard } from "../components/GroupCard";
 import { BranchSelect } from "../components/Layout";
-import { EmptyState, ErrorBanner, Kpi, Notice, PageHeader, Skeleton } from "../components/ui";
+import { EmptyState, ErrorBanner, Kpi, MemberOverdueMark, Notice, PageHeader, Skeleton } from "../components/ui";
 import { usePanelFilter, withFilter } from "../lib/filters";
 import { useGroupFlow } from "../lib/useGroupFlow";
 import { useRemote } from "../lib/useRemote";
@@ -30,7 +31,9 @@ interface Filters {
 
 const emptyFilters: Filters = { weekday: "", period: "", professional: "", onlyFree: false, onlyOverdue: false };
 
+/** A tabela é a exibição padrão (pedido do dono, 07/11); os cartões ficam na alternância. */
 type View = "cards" | "table";
+const defaultView: View = "table";
 
 export function GroupsPage() {
   const [filter] = usePanelFilter();
@@ -38,7 +41,7 @@ export function GroupsPage() {
   const groups = useRemote<GroupsResponse>(withFilter("/groups", filter));
   const flow = useGroupFlow(groups.data?.features.planSale ?? false, groups.reload);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
-  const [view, setView] = useState<View>("cards");
+  const [view, setView] = useState<View>(defaultView);
   const data = groups.data;
 
   const professionals = useMemo(() => [...new Map((data?.groups ?? []).map((group) => [group.professionalId, group.professionalName])).entries()], [data]);
@@ -142,7 +145,18 @@ export function GroupsPage() {
               </div>
             ) : (
               <div className="table-wrap">
-                <table className="data-table groups-table" aria-label="Turmas">
+                {/* Larguras fixas (`table-layout: fixed` + `colgroup`): abrir a lista de matriculados não mexe nas colunas. */}
+                <table className={["data-table groups-table", showOverdue ? "with-overdue" : "", canEnroll ? "with-actions" : ""].filter(Boolean).join(" ")} aria-label="Turmas">
+                  <colgroup>
+                    <col className="col-group" />
+                    <col className="col-schedule" />
+                    <col className="col-enrolled" />
+                    <col className="col-free" />
+                    {showOverdue ? <col className="col-overdue" /> : null}
+                    <col className="col-money" />
+                    <col className="col-money" />
+                    {canEnroll ? <col className="col-actions" /> : null}
+                  </colgroup>
                   <thead>
                     <tr>
                       <th scope="col">Turma</th>
@@ -298,10 +312,11 @@ function GroupTableRow({
           </td>
         ) : null}
       </tr>
+      {/* Linha própria abaixo da turma, ocupando todas as colunas: as células da turma não mudam. */}
       {open ? (
         <tr id={membersId} className="members-row">
           <td colSpan={columns}>
-            <GroupMembers group={group} />
+            <GroupMembers group={group} showOverdue={showOverdue} />
           </td>
         </tr>
       ) : null}
@@ -309,8 +324,12 @@ function GroupTableRow({
   );
 }
 
-/** Matriculados da turma, carregados só quando a linha é aberta. */
-function GroupMembers({ group }: { group: GroupRow }) {
+/**
+ * Matriculados da turma, carregados só quando a linha é aberta. Com `finance.view`, quem tem parcela
+ * vencida aparece marcado como inadimplente. `onSelect` deixa cada nome pronto para virar botão (PT8:
+ * ficha do cliente); sem ele, o nome é só texto.
+ */
+function GroupMembers({ group, showOverdue, onSelect }: { group: Pick<GroupRow, "id" | "name">; showOverdue: boolean; onSelect?: (member: ExternalGroupMember) => void }) {
   const details = useRemote<GroupDetailsResponse>(`/groups/${group.id}`);
   if (details.error && !details.data) return <ErrorBanner message={details.error} onRetry={details.reload} />;
   if (!details.data) return <Skeleton rows={1} />;
@@ -319,11 +338,18 @@ function GroupMembers({ group }: { group: GroupRow }) {
   return (
     <ul className="members-list" aria-label={`Matriculados de ${group.name}`}>
       {members.map((member) => (
-        <li key={member.enrollmentId}>
-          <strong>{member.patientName}</strong>
+        <li key={member.enrollmentId} className={showOverdue && member.overdue ? "is-overdue" : undefined}>
+          {onSelect ? (
+            <button type="button" className="row-title" onClick={() => onSelect(member)}>
+              {member.patientName}
+            </button>
+          ) : (
+            <strong>{member.patientName}</strong>
+          )}
           <small className="muted">
             Desde {shortDate(member.startsOn)} · {member.monthlyInCents === null ? "Sem plano ativo" : `${formatMoney(member.monthlyInCents)}/mês`}
           </small>
+          {showOverdue && member.overdue ? <MemberOverdueMark overdue={member.overdue} /> : null}
         </li>
       ))}
     </ul>
