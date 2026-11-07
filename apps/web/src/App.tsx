@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import type { SessionInfo } from "@dash/shared";
 import { Layout } from "./components/Layout";
 import { Skeleton } from "./components/ui";
@@ -8,9 +8,13 @@ import { SessionContext } from "./lib/session";
 import { CalendarPage } from "./pages/CalendarPage";
 import { GroupsPage } from "./pages/GroupsPage";
 import { LoginPage } from "./pages/LoginPage";
-import { OverduePage } from "./pages/OverduePage";
-import { OverviewPage } from "./pages/OverviewPage";
 import { WaitlistPage } from "./pages/WaitlistPage";
+
+/** A tela inicial é a de turmas; o redirecionamento mantém os filtros da URL (linha, serviços). */
+function ToGroups() {
+  const { search } = useLocation();
+  return <Navigate to={`/turmas${search}`} replace />;
+}
 
 export function AppRoutes() {
   const [session, setSession] = useState<SessionInfo | null>(null);
@@ -40,12 +44,11 @@ export function AppRoutes() {
     <SessionContext.Provider value={{ session, logout }}>
       <Routes>
         <Route element={<Layout />}>
-          <Route index element={<OverviewPage />} />
+          <Route index element={<ToGroups />} />
           <Route path="turmas" element={<GroupsPage />} />
           <Route path="calendario" element={<CalendarPage />} />
           <Route path="espera" element={<WaitlistPage />} />
-          <Route path="inadimplencia" element={<OverduePage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<ToGroups />} />
         </Route>
       </Routes>
     </SessionContext.Provider>

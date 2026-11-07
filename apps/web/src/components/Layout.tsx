@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { CalendarDays, Clock3, Filter, LayoutDashboard, LogOut, Receipt, RefreshCw, Users } from "lucide-react";
+import { CalendarDays, Clock3, Filter, LogOut, RefreshCw, Users } from "lucide-react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { lineKeyLabels, lineKeys, type BranchesResponse, type FiltersResponse, type LineFilter } from "@dash/shared";
 import { setActiveBranch } from "../lib/api";
@@ -8,11 +8,9 @@ import { useRemote } from "../lib/useRemote";
 import { useSession } from "../lib/session";
 
 const nav = [
-  { to: "/", label: "Visão geral", icon: LayoutDashboard },
   { to: "/turmas", label: "Turmas", icon: Users },
   { to: "/calendario", label: "Calendário", icon: CalendarDays },
   { to: "/espera", label: "Lista de espera", icon: Clock3 },
-  { to: "/inadimplencia", label: "Inadimplência", icon: Receipt },
 ];
 
 const lineOptions: { value: LineFilter; label: string }[] = [
@@ -124,7 +122,7 @@ export function Layout() {
         </div>
         <nav className="nav">
           {nav.map(({ to, label, icon: Icon }) => (
-            <NavLink key={to} to={`${to}${keep}`} end={to === "/"} className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}>
+            <NavLink key={to} to={`${to}${keep}`} className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}>
               <Icon size={18} aria-hidden />
               <span>{label}</span>
             </NavLink>
