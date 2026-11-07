@@ -1,19 +1,14 @@
 import { AlertCircle, UserPlus } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
 import { formatMoney, initials, memberBubbles, plural, seatsLabel, slotLabel, type GroupRow } from "@dash/shared";
-import { globalFilters } from "../lib/filters";
 import { LinePill } from "./ui";
 
 /**
  * Cartão da turma: alunos em bolinhas de iniciais (até 6, depois "+N"), "15/20 · 5 vagas",
- * pagamentos atrasados (abre a inadimplência da turma) e inscrever.
+ * pagamentos atrasados (abre o modal da turma, com os inadimplentes marcados) e inscrever.
  */
 export function GroupCard({ group, showOverdue, canEnroll, onOpen, onEnroll }: { group: GroupRow; showOverdue: boolean; canEnroll: boolean; onOpen: () => void; onEnroll: () => void }) {
-  const location = useLocation();
   const names = group.memberNames;
   const bubbles = names ? memberBubbles(names) : null;
-  const keep = globalFilters(location.search);
-  const overdueLink = `/inadimplencia${keep ? `${keep}&` : "?"}turma=${encodeURIComponent(group.id)}`;
   return (
     <article className="group-card" aria-label={group.name}>
       <header className="group-card-head">
@@ -45,12 +40,12 @@ export function GroupCard({ group, showOverdue, canEnroll, onOpen, onEnroll }: {
       </div>
       {showOverdue ? (
         group.overdueMembers > 0 ? (
-          <Link className="group-card-overdue" to={overdueLink}>
+          <button type="button" className="group-card-overdue" onClick={onOpen}>
             <AlertCircle size={16} aria-hidden />
             <span>
               Pagamentos atrasados: {plural(group.overdueMembers, "cliente", "clientes")} · {formatMoney(group.overdueInCents)}
             </span>
-          </Link>
+          </button>
         ) : (
           <span className="group-card-ok muted">Pagamentos em dia</span>
         )

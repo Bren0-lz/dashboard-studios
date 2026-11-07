@@ -30,17 +30,25 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-describe("login e visão geral", () => {
-  it("entra com a conta do CRM e mostra indicadores e oportunidades", async () => {
+describe("login e tela inicial", () => {
+  it("entra com a conta do CRM e abre na tela de turmas", async () => {
     await startServer();
     const user = userEvent.setup();
     renderAt("/");
     await login(user, "admin@aryana.com");
-    expect(await screen.findByRole("heading", { name: "Como estão as vendas hoje?" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Onde tenho vaga para vender?" })).toBeInTheDocument();
     expect(await screen.findByText("Receita parada")).toBeInTheDocument();
-    expect(screen.getByText("Em atraso")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Oportunidades de hoje" })).toBeInTheDocument();
-    expect(screen.getAllByText(/tem \d+ vagas? e \d+ pessoas? na espera/).length).toBeGreaterThan(0);
+    const nav = screen.getByRole("navigation");
+    expect(within(nav).getAllByRole("link").map((link) => link.textContent)).toEqual(["Turmas", "Calendário", "Lista de espera"]);
+  });
+
+  it("leva o endereço antigo da inadimplência para as turmas, com os filtros", async () => {
+    await startServer();
+    const user = userEvent.setup();
+    renderAt("/inadimplencia?linha=aesthetics");
+    await login(user);
+    expect(await screen.findByRole("heading", { name: "Onde tenho vaga para vender?" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Calendário" }).getAttribute("href")).toContain("linha=aesthetics");
   });
 
   it("mostra o erro de senha", async () => {
@@ -124,21 +132,18 @@ describe("turmas", () => {
     expect(within(card).queryByText(/^[A-ZÀ-Ú]{2}$/)).not.toBeInTheDocument();
   });
 
-  it("abre a inadimplência da turma pelo \"Pagamentos atrasados\" do cartão", async () => {
+  it("abre o modal da turma, com os inadimplentes marcados, pelo \"Pagamentos atrasados\" do cartão", async () => {
     await startServer();
     const user = userEvent.setup();
     renderAt("/turmas");
     await login(user);
     await showCards(user);
     const card = await screen.findByRole("article", { name: "Pilates Ter/Qui 18h" });
-    await user.click(within(card).getByRole("link", { name: /Pagamentos atrasados: \d+ clientes? · R\$/ }));
-    expect(await screen.findByRole("heading", { name: "Quem preciso cobrar?" })).toBeInTheDocument();
-    expect(await screen.findByText(/Só os clientes em atraso da turma/)).toHaveTextContent("Pilates Ter/Qui 18h");
-    const rows = screen.getAllByRole("row").filter((row) => within(row).queryAllByRole("cell").length > 0);
-    expect(rows.length).toBeGreaterThan(0);
-    for (const row of rows) expect(row).toHaveTextContent("Pilates Ter/Qui 18h");
-    await user.click(screen.getByRole("link", { name: "Ver todos os atrasos" }));
-    await waitFor(() => expect(screen.queryByText(/Só os clientes em atraso da turma/)).not.toBeInTheDocument());
+    const overdue = within(card).getByRole("button", { name: /Pagamentos atrasados: \d+ clientes? · R\$/ });
+    const count = Number(/(\d+) clientes?/.exec(overdue.textContent ?? "")?.[1]);
+    await user.click(overdue);
+    const modal = await screen.findByRole("dialog", { name: "Pilates Ter/Qui 18h" });
+    expect(await within(modal).findAllByText(/^Inadimplente · R\$ [\d.,]+ · há \d+ dias?$/)).toHaveLength(count);
   });
 
   it("abre o modal com os alunos, telefone e WhatsApp", async () => {
@@ -358,10 +363,10 @@ describe("filiais", () => {
     await user.selectOptions(select, "Barra");
     await waitFor(() => expect(screen.queryByRole("button", { name: "Pilates Ter/Qui 18h" })).not.toBeInTheDocument());
     expect(await screen.findByRole("button", { name: "Pilates Sáb 9h" })).toBeInTheDocument();
-    await user.click(screen.getByRole("link", { name: "Visão geral" }));
-    expect(await screen.findByRole("heading", { name: "Como estão as vendas hoje?" })).toBeInTheDocument();
+    await user.click(screen.getByRole("link", { name: "Lista de espera" }));
+    expect(await screen.findByRole("heading", { name: "Quem está pronto para comprar?" })).toBeInTheDocument();
     expect(screen.getByLabelText("Filial")).toHaveDisplayValue("Barra");
-    expect(calls.filter((call) => call.url === "/api/overview").map((call) => call.branch)).toEqual(["00000000-0000-4000-8000-510000000002"]);
+    expect(calls.filter((call) => call.url === "/api/waitlist").map((call) => call.branch)).toEqual(["00000000-0000-4000-8000-510000000002"]);
   });
 
   it("esconde o seletor quando o CRM ainda não lista as filiais", async () => {
@@ -374,7 +379,7 @@ describe("filiais", () => {
   });
 });
 
-describe("espera, inadimplência e calendário", () => {
+describe("espera e calendário", () => {
   it("destaca vaga compatível na lista de espera", async () => {
     await startServer();
     const user = userEvent.setup();
@@ -382,16 +387,6 @@ describe("espera, inadimplência e calendário", () => {
     await login(user);
     expect((await screen.findAllByText(/Há vaga compatível agora/)).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("link", { name: /Oferecer vaga/ })[0]).toHaveAttribute("href", expect.stringContaining("https://wa.me/55"));
-  });
-
-  it("agrupa a inadimplência por faixa com cobrança pronta", async () => {
-    await startServer();
-    const user = userEvent.setup();
-    renderAt("/inadimplencia");
-    await login(user);
-    expect(await screen.findByText("Total em atraso")).toBeInTheDocument();
-    const charge = screen.getAllByRole("link", { name: /Cobrar/ })[0]!;
-    expect(decodeURIComponent(charge.getAttribute("href")!)).toContain("chave Pix é pix@aryana.com");
   });
 
   it("mostra o calendário no formato da agenda do CRM e o mapa de calor", async () => {
@@ -433,48 +428,20 @@ describe("filtro por linha e por serviço (PT6)", () => {
     expect(screen.getByText("Serviços (2)", { selector: "summary" })).toBeInTheDocument();
 
     // A escolha vai na URL e acompanha a navegação.
-    await user.click(screen.getByRole("link", { name: "Inadimplência" }));
-    expect(await screen.findByRole("heading", { name: "Quem preciso cobrar?" })).toBeInTheDocument();
-    const overdueCall = calls.find((call) => call.url.startsWith("/api/overdue"))!;
-    const query = new URLSearchParams(overdueCall.url.split("?")[1]);
+    await user.click(screen.getByRole("link", { name: "Lista de espera" }));
+    expect(await screen.findByRole("heading", { name: "Quem está pronto para comprar?" })).toBeInTheDocument();
+    const waitlistCall = calls.find((call) => call.url.startsWith("/api/waitlist"))!;
+    const query = new URLSearchParams(waitlistCall.url.split("?")[1]);
     expect(query.get("servicos")?.split(",").sort()).toEqual(["00000000-0000-4000-8000-510000000002", "00000000-0000-4000-8000-510000000006"]);
     await openServices(user);
     expect(screen.getByRole("checkbox", { name: "Dançaterapia" })).toBeChecked();
-    expect(screen.getByRole("link", { name: "Visão geral" }).getAttribute("href")).toContain("servicos=");
+    expect(screen.getByRole("link", { name: "Turmas" }).getAttribute("href")).toContain("servicos=");
 
     // Trocar para Estética tira os serviços do Studio e mostra só os da linha.
     await user.click(screen.getByRole("button", { name: "Estética" }));
     await waitFor(() => expect(screen.getByText("Serviços", { selector: "summary" })).toBeInTheDocument());
     expect(screen.queryByRole("checkbox", { name: "Dançaterapia" })).not.toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: "Limpeza de pele" })).not.toBeChecked();
-  });
-
-  it("mostra Outros nas turmas e na inadimplência; o atraso sem vínculo só aparece em Tudo", async () => {
-    const { crm } = await startServer();
-    const user = userEvent.setup();
-    renderAt("/inadimplencia");
-    await login(user);
-    const product = crm.state.patients[45]!.fullName;
-    const unlinked = crm.state.patients[47]!.fullName;
-    expect(await screen.findByText(unlinked)).toBeInTheDocument();
-    expect(screen.getByText(product)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Outros" }));
-    await waitFor(() => expect(screen.queryByText(unlinked)).not.toBeInTheDocument());
-    expect(await screen.findByText(product)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Studio" }));
-    await waitFor(() => expect(screen.queryByText(product)).not.toBeInTheDocument());
-    expect(screen.queryByText(unlinked)).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Tudo" }));
-    expect(await screen.findByText(unlinked)).toBeInTheDocument();
-  });
-
-  it("com um CRM sem os serviços nas vendas, avisa na visão geral ao escolher serviços", async () => {
-    await startServer({ withoutLineDetails: true });
-    const user = userEvent.setup();
-    renderAt("/?servicos=00000000-0000-4000-8000-510000000001");
-    await login(user);
-    expect(await screen.findByText(/O CRM ainda não informa os serviços de cada venda/)).toBeInTheDocument();
-    expect(screen.getByText("Faturamento do mês")).toBeInTheDocument();
   });
 });
 
