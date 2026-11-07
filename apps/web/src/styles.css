@@ -158,9 +158,13 @@ a {
   color: #fff;
 }
 .nav-link.active {
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
-  box-shadow: inset 3px 0 0 #9fd3bf;
+  background: #f4faf7;
+  color: var(--green);
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+}
+.nav-link.active svg {
+  color: var(--green-2);
 }
 .nav-link:focus-visible {
   outline: 2px solid #9fd3bf;
@@ -1036,7 +1040,7 @@ button.member-card:hover strong {
 }
 .members-list li.is-overdue .member-card {
   border-color: #f0c4be;
-  box-shadow: inset 3px 0 0 var(--late-red);
+  background: #fdf8f7;
 }
 .members-list li.is-overdue button.member-card:hover {
   border-color: var(--green-2);
@@ -1289,8 +1293,20 @@ button.member-card:hover strong {
 .member:hover {
   background: var(--surface-2);
 }
+/* Inadimplente: o avatar ganha um anel vermelho (no lugar de faixa lateral) e a linha um fundo rosado. */
 .member-late {
-  box-shadow: inset 3px 0 0 var(--late-red);
+  background: #fdf6f5;
+}
+.member-late:hover {
+  background: #fbefed;
+}
+.member-late > .avatar,
+.members-list li.is-overdue .member-card > .avatar {
+  background: var(--late-red-bg);
+  color: var(--late-red);
+  box-shadow:
+    0 0 0 2px var(--paper),
+    0 0 0 4px var(--late-red);
 }
 .member-main {
   display: flex;
@@ -2170,8 +2186,7 @@ button.member-card:hover strong {
   overflow: hidden;
   padding: calc(var(--space-2) + 2px) calc(var(--space-2) + 2px) var(--space-2);
   border: 1px solid var(--line);
-  border-left: 3px solid var(--pro-color, var(--green-2));
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: #fff;
   box-shadow: var(--shadow-sm);
   color: var(--ink);
@@ -2277,8 +2292,7 @@ button.member-card:hover strong {
   min-height: calc(var(--space-7) * 2 + var(--space-3));
   padding: var(--space-5);
   border: 1px solid var(--line);
-  border-left: 4px solid var(--pro-color, var(--green-2));
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   background: #fff;
   box-shadow: var(--shadow-sm);
 }
@@ -2460,9 +2474,21 @@ button.member-card:hover strong {
   border-color: transparent;
   background: var(--appt-status-bg);
 }
-.week-appointment[class*="occ-"],
-.agenda-card[class*="occ-"] {
-  border-left-color: var(--pro-color, var(--green-2));
+/* Cor do profissional numa bolinha ao lado do nome (no lugar da faixa lateral). */
+.week-appointment-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.week-appointment-meta > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.week-appointment-meta .pro-dot {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
 }
 
 /* Nome da turma quebra em até 2 linhas (o nome inteiro fica no title). */
