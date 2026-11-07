@@ -15,7 +15,6 @@ import {
   type GroupRow,
   type GroupsResponse,
 } from "@dash/shared";
-import { BranchSelect } from "../components/Layout";
 import { canOpenPatient, PatientModal, type PatientRef } from "../components/PatientModal";
 import { EmptyState, ErrorBanner, Kpi, MemberOverdueMark, Notice, PageHeader, Skeleton } from "../components/ui";
 import { usePanelFilter, withFilter } from "../lib/filters";
@@ -68,7 +67,7 @@ export function GroupsPage() {
 
   return (
     <>
-      <PageHeader title="Onde tenho vaga para vender?" subtitle="Turmas ordenadas pela maior receita parada" actions={<BranchSelect />} />
+      <PageHeader title="Onde tenho vaga para vender?" subtitle="Turmas ordenadas pela maior receita parada" />
       {groups.error ? <ErrorBanner message={groups.error} onRetry={groups.reload} /> : null}
       {!data && groups.loading ? <Skeleton rows={8} /> : null}
       {flow.ui}

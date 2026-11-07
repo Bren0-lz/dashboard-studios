@@ -144,8 +144,7 @@ export function Layout() {
         <div className="topbar">
           <div className="topbar-filters">
             <LineSwitch />
-            {/* Na tela de turmas o seletor fica no topo da própria tela (PT1). */}
-            {location.pathname === "/turmas" ? null : <BranchSelect />}
+            <BranchSelect />
           </div>
           <button type="button" className="secondary-button" onClick={() => window.dispatchEvent(new Event("dash:refresh"))}>
             <RefreshCw size={16} aria-hidden /> Atualizar

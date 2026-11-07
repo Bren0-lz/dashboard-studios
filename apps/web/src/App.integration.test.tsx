@@ -310,8 +310,8 @@ describe("filiais", () => {
     await login(user);
     expect(await screen.findByRole("button", { name: "Pilates Ter/Qui 18h" })).toBeInTheDocument();
     const select = await screen.findByLabelText("Filial");
-    // No topo da tela de turmas, ao lado do título (e não duplicado na barra de cima).
-    expect(screen.getByRole("heading", { name: "Onde tenho vaga para vender?" }).closest("header")).toContainElement(select);
+    // Sempre na barra de cima, também na tela de turmas (e não duplicado no cabeçalho da tela).
+    expect(select.closest(".topbar")).not.toBeNull();
     expect(screen.getAllByLabelText("Filial")).toHaveLength(1);
     expect(within(select).getAllByRole("option").map((option) => option.textContent)).toEqual(["Todas as filiais", "Centro", "Barra"]);
     await user.selectOptions(select, "Barra");
@@ -320,6 +320,7 @@ describe("filiais", () => {
     await user.click(screen.getByRole("link", { name: "Lista de espera" }));
     expect(await screen.findByRole("heading", { name: "Quem está pronto para comprar?" })).toBeInTheDocument();
     expect(screen.getByLabelText("Filial")).toHaveDisplayValue("Barra");
+    expect(screen.getByLabelText("Filial").closest(".topbar")).not.toBeNull();
     expect(calls.filter((call) => call.url === "/api/waitlist").map((call) => call.branch)).toEqual(["00000000-0000-4000-8000-510000000002"]);
   });
 
