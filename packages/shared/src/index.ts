@@ -8,3 +8,4 @@ export * from "./occupancy.js";
 export * from "./overdue.js";
 export * from "./rules.js";
 export * from "./whatsapp.js";
+export * from "./patient-record.js";

@@ -10,6 +10,7 @@ export function capabilitiesOf(user: CrmUser): Capabilities {
     sellPlan: has("plans.purchase"),
     createPatient: has("patients.create"),
     manageWaitlist: has("waitlist.manage"),
+    seePatients: has("patients.view"),
     seeFinance: admin || user.modules.includes("finance") || user.permissions.includes("finance.view"),
     moveLeads: has("crm.stage"),
     contactLeads: has("crm.contacts_create"),

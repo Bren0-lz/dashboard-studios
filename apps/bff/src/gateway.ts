@@ -9,6 +9,8 @@ import {
   leadStagesSchema,
   loginResultSchema,
   overdueReportSchema,
+  patientDetailsSchema,
+  patientPaymentsSchema,
   patientSummarySchema,
   planTemplatesSchema,
   professionalSchema,
@@ -20,6 +22,8 @@ import {
   type ExternalGroupDetails,
   type ExternalGroupsOverview,
   type ExternalOverdueReport,
+  type ExternalPatientDetails,
+  type ExternalPatientPayments,
   type ExternalPatientSummary,
   type CrmBranch,
   type CrmLoginResult,
@@ -113,6 +117,11 @@ export class CrmGateway {
   leadInsights = () => optional(() => this.read<LeadInsights>("/leads/insights", leadInsightsSchema));
   patients = (search: string | undefined, limit = 20) =>
     this.read<ExternalPatientSummary[]>("/patients", z.array(patientSummarySchema), { search, limit });
+  /** Ficha do cliente (PX6): `record` só vem para quem tem `patients.view` no CRM. */
+  patientDetails = (id: string) => this.read<ExternalPatientDetails>(`/patients/${encodeURIComponent(id)}`, patientDetailsSchema);
+  /** Histórico de pagamentos (PX6): o CRM recusa (403) sem `finance.view`. */
+  patientPayments = (id: string, query: Record<string, string | undefined>) =>
+    this.read<ExternalPatientPayments>(`/patients/${encodeURIComponent(id)}/payments`, patientPaymentsSchema, query);
   planTemplates = () => optional(() => this.read<PlanTemplate[]>("/plan-templates", planTemplatesSchema));
 
   enroll = (groupId: string, patientId: string) =>

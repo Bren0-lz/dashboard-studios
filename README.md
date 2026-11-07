@@ -26,7 +26,7 @@ externa. Cada tela responde a uma pergunta de venda e termina numa ação:
 | **Back-end / integração de sistemas** | Servidor Fastify no padrão **BFF** (_backend for frontend_) que consome a API do CRM, monta cada tela pronta e esconde as credenciais do navegador.                                                    |
 | **Dados e validação**                 | Respostas do CRM validadas com Zod ([`crm-schemas.ts`](packages/shared/src/crm-schemas.ts)); regras de negócio puras e testadas ([`rules.ts`](packages/shared/src/rules.ts)); exportação CSV.          |
 | **Segurança**                         | Sessão em cookie `httpOnly`/`SameSite`, proteção **CSRF** com comparação em tempo constante, chave da API só no servidor e ações filtradas pelas permissões do usuário no CRM.                        |
-| **Testes automatizados**              | 96 testes com Vitest: regras de negócio, BFF contra um CRM simulado e telas com Testing Library usando o BFF real em memória.                                                                          |
+| **Testes automatizados**              | 116 testes com Vitest: regras de negócio, BFF contra um CRM simulado e telas com Testing Library usando o BFF real em memória.                                                                          |
 | **Visualização de dados e design**    | Gráficos com Recharts, mapa de calor de ocupação, cores com significado fixo (ocupado, parcial, vazio, faixas de atraso) e os mesmos tokens visuais do CRM.                                            |
 
 ---
@@ -94,6 +94,9 @@ npm run dev:mock
 Abre o CRM simulado (porta 4100), o servidor (4000) e o site em http://localhost:5180.
 Entre com `admin@aryana.com` / `senha123` (tudo liberado) ou `vendas@aryana.com` / `senha123`
 (sem inscrever, financeiro nem contato dos alunos, para ver as ações e dados escondidos).
+Para a ficha do cliente (nome do matriculado na tabela ou no modal da turma), `clientes@aryana.com` vê
+só os dados cadastrais e `financeiro@aryana.com` só o histórico de pagamentos; sem nenhuma das duas
+permissões, o nome não é botão.
 
 Contra um CRM de verdade: ajuste `CRM_API_URL` e `CRM_API_KEY` no `.env` e rode `npm run dev`.
 
@@ -128,6 +131,7 @@ real não os oferece, o painel se adapta:
 | `GET /external/v1/branches`                       | O seletor de filial some e o painel mostra a rede toda                                           |
 | Profissional da venda em `SaleMovement`           | O ranking por profissional fica vazio                                                            |
 | Calendário de encontros (`/group-sessions`)       | O calendário usa os horários fixos das turmas                                                    |
+| Ficha do cliente e histórico de pagamentos (PX6: `/patients/:id` e `/patients/:id/payments`) | O nome do matriculado abre a ficha com o aviso "CRM ainda sem a ficha" |
 
 Filtro do topo: linha (Tudo, Studio, Estética, Outros = sem classificação no CRM) e serviços do
 CRM (vários ao mesmo tempo, agrupados por linha; o inativo que ainda tem turma aparece marcado),
