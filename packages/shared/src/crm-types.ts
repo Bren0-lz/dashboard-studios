@@ -60,7 +60,7 @@ export interface ExternalGroupRow {
   monthlyRevenueInCents: number;
   potentialMonthlyRevenueInCents: number;
   /** Fase 0 (3.1). */
-  businessLine?: BusinessLine;
+  businessLine?: BusinessLine | null;
   /** Fase 0 (3.2). */
   overdueMembers?: number;
   /** Fase 0 (3.2). */
@@ -136,7 +136,7 @@ export interface ExternalOverdueRow {
   oldestDueDate: string;
   daysOverdue: number;
   band?: OverdueBand;
-  businessLine?: BusinessLine;
+  businessLine?: BusinessLine | null;
   lastContactAt?: string;
 }
 
@@ -154,7 +154,7 @@ export interface Service {
   priceInCents?: number;
   durationMinutes?: number;
   /** Fase 0 (3.1). */
-  businessLine?: BusinessLine;
+  businessLine?: BusinessLine | null;
 }
 
 export interface Professional {
@@ -197,7 +197,7 @@ export interface SaleMovement {
   receivableId?: string;
   customerDiscountInCents?: number;
   /** Fase 0 (3.1). */
-  businessLine?: BusinessLine;
+  businessLine?: BusinessLine | null;
   /** Profissional da venda, quando o CRM informar. */
   professionalName?: string;
 }

@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { groupRowSchema, serviceSchema } from "./crm-schemas.js";
+import { lineOf, matchesLine } from "./business-line.js";
 import type { ExternalGroupRow, WaitlistEntry } from "./crm-types.js";
 import { initials, memberBubbles, seatsLabel, slotLabel } from "./format.js";
 import {
@@ -276,5 +278,42 @@ describe("cartão da turma", () => {
     expect(seatsLabel({ enrolled: 15, capacity: 20, freeSeats: 5 })).toBe("15/20 · 5 vagas");
     expect(seatsLabel({ enrolled: 7, capacity: 8, freeSeats: 1 })).toBe("7/8 · 1 vaga");
     expect(seatsLabel({ enrolled: 8, capacity: 8, freeSeats: 0 })).toBe("8/8 · turma cheia");
+  });
+});
+
+describe("linha sem classificação (CRM com PX3)", () => {
+  const group = {
+    id: "g1",
+    name: "Turma",
+    active: true,
+    serviceId: "s1",
+    serviceName: "Massoterapia",
+    professionalId: "p1",
+    professionalName: "Ana",
+    roomId: "r1",
+    roomName: "Sala 1",
+    schedule: "Seg 08:00",
+    weeklySlots: [],
+    capacity: 10,
+    enrolled: 2,
+    freeSeats: 8,
+    waitlistCount: 0,
+    occupancyPercent: 20,
+    sessionsPerMonth: 4,
+    monthlyRevenueInCents: 0,
+    potentialMonthlyRevenueInCents: 0,
+  };
+
+  it("aceita businessLine null em turmas e serviços (o mesmo campo vale para vendas e inadimplência)", () => {
+    expect(groupRowSchema.safeParse({ ...group, businessLine: null }).success).toBe(true);
+    expect(serviceSchema.safeParse({ id: "s1", name: "Massoterapia", active: true, businessLine: null }).success).toBe(true);
+    expect(groupRowSchema.safeParse({ ...group, businessLine: "dance" }).success).toBe(false);
+  });
+
+  it("trata a linha null como Studio até o filtro Outros existir", () => {
+    expect(lineOf({ businessLine: null })).toBe("studio");
+    expect(matchesLine({ businessLine: null }, "studio")).toBe(true);
+    expect(matchesLine({ businessLine: null }, "aesthetics")).toBe(false);
+    expect(matchesLine({ businessLine: null }, "all")).toBe(true);
   });
 });

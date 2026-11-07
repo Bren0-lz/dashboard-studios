@@ -5,7 +5,8 @@
  */
 import { z } from "zod";
 
-const businessLine = z.enum(["studio", "aesthetics"]).optional();
+/** Desde a PX3 do CRM, serviço (e produto) sem classificação vem com `null`. */
+const businessLine = z.enum(["studio", "aesthetics"]).nullable().optional();
 const slot = z.looseObject({ weekday: z.number().int().min(0).max(6), startTime: z.string(), endTime: z.string() });
 const enrollmentStatus = z.enum(["active", "waitlisted", "cancelled"]);
 
