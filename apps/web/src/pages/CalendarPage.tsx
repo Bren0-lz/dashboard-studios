@@ -401,7 +401,10 @@ function WeekCard({ session, color, onOpen }: { session: Session; color: string 
         {group.name}
       </strong>
       <span className="week-appointment-meta">
-        {group.professionalName} · {group.roomName}
+        <i className="pro-dot" aria-hidden="true" />
+        <span>
+          {group.professionalName} · {group.roomName}
+        </span>
       </span>
       <span className="week-appointment-foot">
         <Members group={group} max={4} />

@@ -1,4 +1,4 @@
-import { ArrowUpCircle, UserMinus, UserPlus } from "lucide-react";
+import { ArrowUpCircle, Clock3, UserMinus, UserPlus, Users } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import {
   firstName,
@@ -34,11 +34,8 @@ function contactLine(member: ExternalGroupMember): string {
 function MemberName({ member, children, onSelect }: { member: ExternalGroupMember; children?: ReactNode; onSelect?: (() => void) | undefined }) {
   return (
     <div className="member-who">
-      <span className="avatar" aria-hidden>
-        {initials(member.patientName)}
-      </span>
+      {children}
       <strong>
-        {children}
         {onSelect ? (
           <button type="button" className="row-title member-link" onClick={onSelect} title="Ver ficha do cliente">
             {member.patientName}
@@ -84,8 +81,19 @@ export function GroupModal({ groupId, onClose, onEnroll, onChanged }: { groupId:
 
   const nextInLine = group?.waitlist[0];
   return (
-    <Modal title={group?.name ?? "Turma"} onClose={onClose} busy={action.busy}>
-      {group ? <p className="panel-context">{`${group.schedule} · ${group.professionalName} · ${group.roomName}`}</p> : null}
+    <Modal
+      title={group?.name ?? "Turma"}
+      subtitle={group ? `${group.schedule} · ${group.professionalName} · ${group.roomName}` : undefined}
+      onClose={onClose}
+      busy={action.busy}
+      footer={
+        group && session.can.enroll ? (
+          <button type="button" className="primary-button" onClick={() => onEnroll(group)} disabled={action.busy}>
+            <UserPlus size={16} aria-hidden /> {group.freeSeats > 0 ? "Inscrever" : "Colocar na espera"}
+          </button>
+        ) : undefined
+      }
+    >
       {details.error ? <ErrorBanner message={details.error} onRetry={details.reload} /> : null}
       {!group && details.loading ? <Skeleton rows={5} /> : null}
       {notice ? <Notice tone="success">{notice}</Notice> : null}
@@ -93,19 +101,36 @@ export function GroupModal({ groupId, onClose, onEnroll, onChanged }: { groupId:
       {group ? (
         <>
           <div className="group-summary">
-            <LinePill line={group.businessLine} />
-            <OccupancyBar enrolled={group.enrolled} capacity={group.capacity} percent={group.occupancyPercent} />
-            <span>{group.freeSeats > 0 ? `${group.freeSeats} ${group.freeSeats === 1 ? "vaga para vender" : "vagas para vender"}` : "Turma cheia"}</span>
-            <span>{formatMoney(group.monthlyRevenueInCents)}/mês</span>
+            <div className="summary-stat">
+              <span className="summary-label">
+                Ocupação <LinePill line={group.businessLine} />
+              </span>
+              <OccupancyBar enrolled={group.enrolled} capacity={group.capacity} percent={group.occupancyPercent} />
+            </div>
+            <div className="summary-stat">
+              <span className="summary-label">Vagas</span>
+              <strong className={group.freeSeats > 0 ? "summary-value" : "summary-value text-good"}>
+                {group.freeSeats > 0 ? `${group.freeSeats} ${group.freeSeats === 1 ? "vaga para vender" : "vagas para vender"}` : "Turma cheia"}
+              </strong>
+            </div>
+            <div className="summary-stat">
+              <span className="summary-label">Receita</span>
+              <strong className="summary-value">{formatMoney(group.monthlyRevenueInCents)}/mês</strong>
+            </div>
           </div>
 
-          <h3 className="section-title">Alunos ({group.members.length})</h3>
+          <h3 className="section-title">
+            <Users size={16} aria-hidden /> Alunos ({group.members.length})
+          </h3>
           {group.members.length === 0 ? (
             <EmptyState title="Nenhum inscrito ainda" hint="Use “Inscrever” para vender a primeira vaga." />
           ) : (
             <ul className="member-list">
               {group.members.map((member) => (
-                <li key={member.enrollmentId} className="member">
+                <li key={member.enrollmentId} className={member.overdue && session.can.seeFinance ? "member member-late" : "member"}>
+                  <span className="avatar" aria-hidden>
+                    {initials(member.patientName)}
+                  </span>
                   <div className="member-main">
                     <MemberName member={member} onSelect={canOpen ? () => setPatient({ id: member.patientId, name: member.patientName }) : undefined} />
                     <span className="muted">{[contactLine(member), member.monthlyInCents !== null ? `${formatMoney(member.monthlyInCents)}/mês` : "sem plano ativo"].filter(Boolean).join(" · ")}</span>
@@ -133,15 +158,20 @@ export function GroupModal({ groupId, onClose, onEnroll, onChanged }: { groupId:
             </ul>
           )}
 
-          <h3 className="section-title">Lista de espera da turma ({group.waitlist.length})</h3>
+          <h3 className="section-title">
+            <Clock3 size={16} aria-hidden /> Lista de espera da turma ({group.waitlist.length})
+          </h3>
           {group.waitlist.length === 0 ? (
-            <p className="muted">Ninguém esperando por esta turma.</p>
+            <p className="muted section-empty">Ninguém esperando por esta turma.</p>
           ) : (
             <ul className="member-list">
               {group.waitlist.map((member) => (
                 <li key={member.enrollmentId} className="member">
+                  <span className="avatar queue-position" aria-hidden>
+                    {member.queuePosition ?? initials(member.patientName)}
+                  </span>
                   <div className="member-main">
-                    <MemberName member={member}>{member.queuePosition ? `${member.queuePosition}º · ` : ""}</MemberName>
+                    <MemberName member={member}>{member.queuePosition ? <span className="sr-only">{`${member.queuePosition}º · `}</span> : null}</MemberName>
                     {contactLine(member) ? <span className="muted">{contactLine(member)}</span> : null}
                   </div>
                   <div className="member-actions">
@@ -156,13 +186,6 @@ export function GroupModal({ groupId, onClose, onEnroll, onChanged }: { groupId:
               ))}
             </ul>
           )}
-          {session.can.enroll ? (
-            <div className="modal-actions">
-              <button type="button" className="primary-button" onClick={() => onEnroll(group)} disabled={action.busy}>
-                <UserPlus size={16} aria-hidden /> {group.freeSeats > 0 ? "Inscrever" : "Colocar na espera"}
-              </button>
-            </div>
-          ) : null}
         </>
       ) : null}
       {patient ? <PatientModal patient={patient} onClose={() => setPatient(null)} /> : null}

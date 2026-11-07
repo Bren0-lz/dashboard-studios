@@ -1,9 +1,11 @@
-import { AlertCircle, ChevronDown, UserPlus } from "lucide-react";
+import { AlertCircle, ChevronDown, Clock3, TrendingDown, UserPlus, Users, Wallet } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
   dayPeriodLabels,
   dayPeriodOf,
   formatMoney,
+  initials,
+  occupancyTone,
   shortDate,
   slotLabel,
   weekdayLong,
@@ -74,10 +76,16 @@ export function GroupsPage() {
       {data ? (
         <>
           <section className="kpi-grid kpi-grid-compact">
-            <Kpi label="Vagas para vender" value={String(data.totals.freeSeats)} detail={`em ${data.totals.groups} turmas`} />
-            <Kpi label="Receita parada" value={formatMoney(data.totals.idleRevenueInCents)} detail="por mês" tone="warn" />
-            <Kpi label="Faturamento atual" value={formatMoney(data.totals.monthlyRevenueInCents)} detail={`potencial ${formatMoney(data.totals.potentialMonthlyRevenueInCents)}`} />
-            <Kpi label="Espera nas turmas" value={String(data.totals.waitlistCount)} detail="pessoas aguardando vaga" />
+            <Kpi label="Vagas para vender" value={String(data.totals.freeSeats)} detail={`em ${data.totals.groups} turmas`} icon={<Users size={18} />} />
+            <Kpi label="Receita parada" value={formatMoney(data.totals.idleRevenueInCents)} detail="por mês" tone="warn" icon={<TrendingDown size={18} />} iconTone="warn" />
+            <Kpi
+              label="Faturamento atual"
+              value={formatMoney(data.totals.monthlyRevenueInCents)}
+              detail={`potencial ${formatMoney(data.totals.potentialMonthlyRevenueInCents)}`}
+              icon={<Wallet size={18} />}
+              iconTone="good"
+            />
+            <Kpi label="Espera nas turmas" value={String(data.totals.waitlistCount)} detail="pessoas aguardando vaga" icon={<Clock3 size={18} />} iconTone="info" />
           </section>
           <section className="panel">
             <div className="list-toolbar">
@@ -264,8 +272,13 @@ function GroupTableRow({
             aria-label={`${open ? "Ocultar" : "Ver"} matriculados de ${group.name}: ${group.enrolled} de ${group.capacity}`}
             onClick={onToggle}
           >
-            {group.enrolled} de {group.capacity}
-            <ChevronDown size={16} aria-hidden />
+            <span className="members-toggle-count">
+              {group.enrolled} de {group.capacity}
+              <ChevronDown size={16} aria-hidden />
+            </span>
+            <span className={`occupancy-track tone-${occupancyTone(group.occupancyPercent)}`} aria-hidden>
+              <span className="occupancy-fill" style={{ "--fill": `${Math.min(100, group.occupancyPercent)}%` } as React.CSSProperties} />
+            </span>
           </button>
         </td>
         <td data-label="Vagas disponíveis" className="num">
@@ -311,6 +324,9 @@ function GroupTableRow({
 function MemberCardContent({ member, showOverdue }: { member: ExternalGroupMember; showOverdue: boolean }) {
   return (
     <>
+      <span className="avatar" aria-hidden>
+        {initials(member.patientName)}
+      </span>
       <strong>{member.patientName}</strong>
       <small className="muted">
         Desde {shortDate(member.startsOn)} · {member.monthlyInCents === null ? "Sem plano ativo" : `${formatMoney(member.monthlyInCents)}/mês`}

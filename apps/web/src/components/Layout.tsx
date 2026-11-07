@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { CalendarDays, Clock3, Filter, LogOut, RefreshCw, Users } from "lucide-react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { lineKeyLabels, lineKeys, type BranchesResponse, type FiltersResponse, type LineFilter } from "@dash/shared";
+import { initials, lineKeyLabels, lineKeys, type BranchesResponse, type FiltersResponse, type LineFilter } from "@dash/shared";
 import { setActiveBranch } from "../lib/api";
 import { globalFilters, useBranchFilter, usePanelFilter } from "../lib/filters";
 import { useRemote } from "../lib/useRemote";
@@ -129,7 +129,12 @@ export function Layout() {
           ))}
         </nav>
         <div className="sidebar-foot">
-          <span className="user-name">{session.user.fullName}</span>
+          <span className="sidebar-user">
+            <span className="avatar" aria-hidden>
+              {initials(session.user.fullName)}
+            </span>
+            <span className="user-name">{session.user.fullName}</span>
+          </span>
           <button type="button" className="link-button" onClick={logout}>
             <LogOut size={16} aria-hidden /> Sair
           </button>
