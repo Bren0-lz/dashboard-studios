@@ -1,4 +1,4 @@
-import { addDays, type BusinessLine, type GroupWeeklySlot } from "@dash/shared";
+import { addDays, type BusinessLine, type ExternalPatientRecord, type GroupWeeklySlot, type PaymentMethod } from "@dash/shared";
 
 /**
  * Dados de demonstração do CRM simulado: Pilates e Dança (Studio), Depilação e Limpeza de pele
@@ -38,6 +38,10 @@ export interface MockPatient {
   email?: string;
   cpf: string;
   tags: string[];
+  /** Ficha do cliente (PX6): campos do perfil preenchidos (data de nascimento, endereço, contato de emergência…). */
+  profile?: Partial<Omit<ExternalPatientRecord, "recordNumber" | "status" | "phone" | "whatsapp" | "email" | "cpf" | "tags" | "branches" | "activePlans" | "groups" | "createdAt">>;
+  status?: "active" | "inactive";
+  createdAt?: string;
 }
 
 export interface MockGroup {
@@ -75,18 +79,46 @@ export interface MockPlan {
   totalValueInCents: number;
 }
 
+/** Baixa ou estorno de uma cobrança (histórico de pagamentos, PX6). */
+export interface MockPaymentEvent {
+  id: string;
+  kind: "payment" | "reversal";
+  occurredAt: string;
+  amountInCents: number;
+  paymentMethod?: PaymentMethod;
+  discountInCents?: number;
+}
+
 export interface MockReceivable {
   id: string;
   patientId: string;
   planId?: string;
   dueDate: string;
   amountInCents: number;
-  status: "open" | "paid";
+  /** `cancelled`: venda/comanda cancelada (com a baixa estornada). */
+  status: "open" | "paid" | "cancelled";
   paidAt?: string;
   /** Desconto dado na baixa. */
   discountInCents?: number;
   /** Linhas dos produtos da comanda cobrada por esta parcela (PX5; `null` = sem classificação). */
   productLines?: (BusinessLine | null)[];
+  /**
+   * Histórico (PX6). Sem plano: `tab` (comanda com atendimento), `sale` (comanda só com produtos) ou
+   * `manual`; sem o campo, `sale` quando há produto e `manual` quando não há.
+   */
+  origin?: "tab" | "sale" | "manual";
+  /** Serviços atendidos na comanda. */
+  serviceIds?: string[];
+  /** Comanda de origem. */
+  sourceId?: string;
+  description?: string;
+  paymentMethod?: PaymentMethod;
+  /** Desconto do cliente na cobrança. */
+  customerDiscountInCents?: number;
+  /** Saldo de baixa parcial: a cobrança de origem (origem, serviços e produtos vêm dela). */
+  balanceOf?: string;
+  /** Baixas e estornos; sem o campo, a cobrança paga tem uma baixa no `paidAt` com o valor inteiro. */
+  events?: MockPaymentEvent[];
 }
 
 export interface MockSale {
@@ -343,6 +375,100 @@ export function createDemoState(today: string): MockState {
   // Comanda de produto sem classificação vencida (só "Outros") e parcela lançada à mão, sem vínculo (só "Tudo").
   receivables.push({ id: id("58", 9001), patientId: patients[45]!.id, dueDate: addDays(today, -6), amountInCents: 10000, status: "open", productLines: [null] });
   receivables.push({ id: id("58", 9002), patientId: patients[47]!.id, dueDate: addDays(today, -15), amountInCents: 7000, status: "open" });
+  // Histórico de pagamentos variado (PX6) da 1ª aluna de Pilates Ter/Qui 18h: comanda com baixa parcial e o
+  // saldo em aberto, venda de produto cancelada com a baixa estornada, comanda estornada que voltou a ficar em
+  // aberto e um lançamento manual pago com desconto. As parcelas do plano dela já têm paga e vencida.
+  const history = patients[0]!;
+  const at = (days: number, hour = "13:00") => `${addDays(today, days)}T${hour}:00.000Z`;
+  history.profile = {
+    nickname: "Mari",
+    birthDate: "1988-04-12",
+    emergencyContactName: "João Souza",
+    emergencyContactPhone: "11988887777",
+    address: "Rua das Flores",
+    addressNumber: "120",
+    neighborhood: "Centro",
+    city: "São Paulo",
+    state: "SP",
+    postalCode: "01010-000",
+    gender: "female",
+    occupation: "Professora",
+    source: "Indicação",
+    clientSince: "2024-03-01",
+    imageConsent: true,
+    interests: ["Pilates", "Limpeza de pele"],
+  };
+  history.createdAt = "2024-03-01T12:00:00.000Z";
+  receivables.push(
+    {
+      id: id("58", 9100),
+      patientId: history.id,
+      origin: "tab",
+      sourceId: id("66", 1),
+      serviceIds: [pele.id],
+      productLines: ["aesthetics"],
+      description: "Comanda — Limpeza de pele e Óleo corporal",
+      dueDate: addDays(today, -25),
+      amountInCents: 14_900,
+      status: "paid",
+      paidAt: addDays(today, -25),
+      paymentMethod: "card",
+      events: [{ id: id("67", 1), kind: "payment", occurredAt: at(-25), amountInCents: 14_900, paymentMethod: "card" }],
+    },
+    {
+      id: id("58", 9101),
+      patientId: history.id,
+      balanceOf: id("58", 9100),
+      description: "Saldo — Comanda Limpeza de pele e Óleo corporal",
+      dueDate: addDays(today, 5),
+      amountInCents: 10_000,
+      status: "open",
+    },
+    {
+      id: id("58", 9102),
+      patientId: history.id,
+      origin: "sale",
+      sourceId: id("66", 2),
+      productLines: ["studio"],
+      description: "Venda — Meia antiderrapante",
+      dueDate: addDays(today, -12),
+      amountInCents: 3_500,
+      status: "cancelled",
+      events: [
+        { id: id("67", 2), kind: "payment", occurredAt: at(-12), amountInCents: 3_500, paymentMethod: "pix" },
+        { id: id("67", 3), kind: "reversal", occurredAt: at(-10), amountInCents: 3_500, paymentMethod: "pix" },
+      ],
+    },
+    {
+      id: id("58", 9103),
+      patientId: history.id,
+      origin: "tab",
+      sourceId: id("66", 3),
+      serviceIds: [avaliacao.id],
+      description: "Comanda — Avaliação funcional",
+      dueDate: addDays(today, 3),
+      amountInCents: 12_000,
+      status: "open",
+      events: [
+        { id: id("67", 4), kind: "payment", occurredAt: at(-2), amountInCents: 12_000, paymentMethod: "cash" },
+        { id: id("67", 5), kind: "reversal", occurredAt: at(-1), amountInCents: 12_000, paymentMethod: "cash" },
+      ],
+    },
+    {
+      id: id("58", 9104),
+      patientId: history.id,
+      origin: "manual",
+      description: "Taxa de matrícula",
+      dueDate: addDays(today, -80),
+      amountInCents: 4_500,
+      customerDiscountInCents: 500,
+      status: "paid",
+      paidAt: addDays(today, -80),
+      paymentMethod: "pix",
+      discountInCents: 300,
+      events: [{ id: id("67", 6), kind: "payment", occurredAt: at(-80), amountInCents: 4_500, paymentMethod: "pix", discountInCents: 300 }],
+    },
+  );
   const waitlist: MockWaitlistEntry[] = [
     [40, pilates.id, 12, "Prefere à noite"],
     [41, pilates.id, 8, ""],
@@ -403,6 +529,9 @@ export function createDemoState(today: string): MockState {
     users: [
       { id: id("64", 1), fullName: "Aryana Mendes", email: "admin@aryana.com", password: "senha123", role: "admin", modules: ["finance", "groups", "crm"], permissions: fullPermissions },
       { id: id("64", 2), fullName: "Vitória Recepção", email: "vendas@aryana.com", password: "senha123", role: "user", modules: ["groups", "crm"], permissions: ["crm.stage", "crm.contacts_create", "waitlist.manage"] },
+      // Ficha do cliente (PT8): só Clientes (`patients.view`) ou só Financeiro (`finance.view`).
+      { id: id("64", 3), fullName: "Paula Cadastro", email: "clientes@aryana.com", password: "senha123", role: "user", modules: ["groups", "patients"], permissions: ["patients.view"] },
+      { id: id("64", 4), fullName: "Fábio Financeiro", email: "financeiro@aryana.com", password: "senha123", role: "user", modules: ["groups", "finance"], permissions: ["finance.view"] },
     ],
     services,
     professionals,
