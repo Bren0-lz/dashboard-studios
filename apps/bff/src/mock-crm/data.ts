@@ -22,7 +22,8 @@ export interface MockService {
   id: string;
   name: string;
   active: boolean;
-  priceInCents: number;
+  /** Como no CRM (AP1): o serviço não tem preço; este é o valor por sessão do plano avulso. */
+  singleSessionPriceInCents: number;
   durationMinutes: number;
   color: string;
   /** PX3: `null` = sem classificação. */
@@ -124,14 +125,17 @@ export interface MockReceivable {
 export interface MockSale {
   id: string;
   sourceId: string;
+  /** `service` só em comanda antiga (o CRM não vende mais serviço). */
   sourceType: "plan" | "product" | "service";
+  /** Plano avulso (uma sessão de um serviço). */
+  planKind?: "single";
   kind: "sale" | "cancellation";
   occurredAt: string;
   patientId: string;
   itemName: string;
   quantity: number;
   amountInCents: number;
-  /** Serviço vendido ou serviços do plano; vazio em produto. */
+  /** Serviços do plano (ou o serviço da comanda antiga); vazio em produto. */
   serviceIds: string[];
   /** Venda de produto: linha do produto (`null` = sem classificação). */
   productLine?: BusinessLine | null;
@@ -217,12 +221,12 @@ export function createDemoState(today: string): MockState {
   const iso = (days: number) => `${addDays(today, days)}T13:00:00.000Z`;
   const fullPermissions = ["patients.view", "groups.enroll", "groups.cancel_enrollment", "plans.purchase", "patients.create", "waitlist.manage", "crm.stage", "crm.contacts_create", "crm.convert"];
   const services: MockService[] = [
-    { id: id("51", 1), name: "Pilates", active: true, priceInCents: 9000, durationMinutes: 60, color: "#26705f", businessLine: "studio" },
-    { id: id("51", 2), name: "Dançaterapia", active: true, priceInCents: 7000, durationMinutes: 60, color: "#c96f50", businessLine: "studio" },
-    { id: id("51", 3), name: "Depilação a laser", active: true, priceInCents: 15000, durationMinutes: 30, color: "#b85d53", businessLine: "aesthetics" },
-    { id: id("51", 4), name: "Limpeza de pele", active: true, priceInCents: 18000, durationMinutes: 60, color: "#d3a349", businessLine: "aesthetics" },
-    { id: id("51", 5), name: "Avaliação funcional", active: true, priceInCents: 12000, durationMinutes: 45, color: "#6d7a8c", businessLine: null },
-    { id: id("51", 6), name: "Pilates Solo", active: false, priceInCents: 8000, durationMinutes: 60, color: "#4c8a6f", businessLine: "studio" },
+    { id: id("51", 1), name: "Pilates", active: true, singleSessionPriceInCents: 9000, durationMinutes: 60, color: "#26705f", businessLine: "studio" },
+    { id: id("51", 2), name: "Dançaterapia", active: true, singleSessionPriceInCents: 7000, durationMinutes: 60, color: "#c96f50", businessLine: "studio" },
+    { id: id("51", 3), name: "Depilação a laser", active: true, singleSessionPriceInCents: 15000, durationMinutes: 30, color: "#b85d53", businessLine: "aesthetics" },
+    { id: id("51", 4), name: "Limpeza de pele", active: true, singleSessionPriceInCents: 18000, durationMinutes: 60, color: "#d3a349", businessLine: "aesthetics" },
+    { id: id("51", 5), name: "Avaliação funcional", active: true, singleSessionPriceInCents: 12000, durationMinutes: 45, color: "#6d7a8c", businessLine: null },
+    { id: id("51", 6), name: "Pilates Solo", active: false, singleSessionPriceInCents: 8000, durationMinutes: 60, color: "#4c8a6f", businessLine: "studio" },
   ];
   const [pilates, danca, laser, pele, avaliacao, solo] = services as [MockService, MockService, MockService, MockService, MockService, MockService];
   const professionals = [
@@ -334,7 +338,7 @@ export function createDemoState(today: string): MockState {
       });
     }
   });
-  // Vendas avulsas recentes (sessões e procedimentos) para o gráfico diário.
+  // Planos avulsos recentes (uma sessão do serviço, vendidos no agendamento) para o gráfico diário.
   for (let day = 0; day < 75; day += 1) {
     if (day % 3 === 2) continue;
     const service = [pilates, danca, laser, pele][(day * 5) % 4]!;
@@ -343,13 +347,14 @@ export function createDemoState(today: string): MockState {
     sales.push({
       id: id("59", counter),
       sourceId: id("60", counter),
-      sourceType: "service",
+      sourceType: "plan",
+      planKind: "single",
       kind: day % 17 === 0 ? "cancellation" : "sale",
       occurredAt: iso(-day),
       patientId: patient.id,
       itemName: service.name,
       quantity: 1,
-      amountInCents: service.priceInCents * (1 + (day % 3)),
+      amountInCents: service.singleSessionPriceInCents * (1 + (day % 3)),
       serviceIds: [service.id],
       professionalId: professionals[(day + 1) % professionals.length]!.id,
       ...(day % 4 === 0 && day % 17 !== 0 ? { customerDiscountInCents: 1_500 } : {}),
@@ -362,8 +367,10 @@ export function createDemoState(today: string): MockState {
   plans.push({ id: comboPlanId, patientId: comboPatient.id, serviceId: pilates.id, extraServiceIds: [pele.id], name: "Combo Pilates + Limpeza de pele", status: "active", validFrom: comboFrom, validUntil: addDays(today, 70), monthlyInCents: 50000, totalValueInCents: 50000 });
   receivables.push({ id: id("58", 9000), patientId: comboPatient.id, planId: comboPlanId, dueDate: addDays(today, -10), amountInCents: 50000, status: "open" });
   sales.push({ id: id("59", 900), sourceId: comboPlanId, sourceType: "plan", kind: "sale", occurredAt: `${comboFrom}T14:00:00.000Z`, patientId: comboPatient.id, itemName: "Combo Pilates + Limpeza de pele", quantity: 1, amountInCents: 50000, serviceIds: [pilates.id, pele.id], professionalId: professionals[0]!.id });
-  // Avaliação funcional (serviço sem classificação) e produtos de cada linha, vendidos no mês.
-  sales.push({ id: id("59", 901), sourceId: id("60", 901), sourceType: "service", kind: "sale", occurredAt: iso(-3), patientId: patients[30]!.id, itemName: avaliacao.name, quantity: 1, amountInCents: avaliacao.priceInCents, serviceIds: [avaliacao.id], professionalId: professionals[0]!.id });
+  // Avaliação funcional (serviço sem classificação) em plano avulso e produtos de cada linha, vendidos no mês.
+  sales.push({ id: id("59", 901), sourceId: id("60", 901), sourceType: "plan", planKind: "single", kind: "sale", occurredAt: iso(-3), patientId: patients[30]!.id, itemName: avaliacao.name, quantity: 1, amountInCents: avaliacao.singleSessionPriceInCents, serviceIds: [avaliacao.id], professionalId: professionals[0]!.id });
+  // Serviço de comanda antiga (antes de o CRM deixar de vender serviço): o CRM ainda o envia como "service".
+  sales.push({ id: id("59", 902), sourceId: id("60", 902), sourceType: "service", kind: "sale", occurredAt: iso(-40), patientId: patients[31]!.id, itemName: avaliacao.name, quantity: 1, amountInCents: avaliacao.singleSessionPriceInCents, serviceIds: [avaliacao.id], professionalId: professionals[0]!.id });
   const products: [string, BusinessLine | null, number][] = [
     ["Meia antiderrapante", "studio", 3500],
     ["Óleo corporal", "aesthetics", 6900],

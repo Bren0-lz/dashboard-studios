@@ -118,6 +118,7 @@ const salesPeriodSchema = z.looseObject({
 export const saleMovementSchema = z.looseObject({
   id: z.string(),
   sourceType: z.enum(["plan", "product", "service"]),
+  planKind: z.enum(["single"]).optional(),
   kind: z.enum(["sale", "cancellation"]),
   occurredAt: z.string(),
   patientId: z.string(),

@@ -170,7 +170,8 @@ export interface Service {
   id: string;
   name: string;
   active: boolean;
-  priceInCents?: number;
+  /** Valor por sessão do plano avulso do serviço (o serviço não tem preço próprio). */
+  singleSessionPriceInCents?: number;
   durationMinutes?: number;
   /** Fase 0 (3.1); PX3: `null` = sem classificação. */
   businessLine?: BusinessLine | null;
@@ -205,7 +206,10 @@ export interface WaitlistEntry {
 export interface SaleMovement {
   id: string;
   sourceId: string;
+  /** `service` só em comanda antiga: o CRM não vende mais serviço (todo atendimento sai de um plano). */
   sourceType: "plan" | "product" | "service";
+  /** Plano avulso (uma sessão de um serviço, vendido no agendamento). Ausente = outros planos ou CRM antigo. */
+  planKind?: "single";
   kind: "sale" | "cancellation";
   occurredAt: string;
   patientId: string;
@@ -220,7 +224,7 @@ export interface SaleMovement {
    * qualquer venda (fase 0).
    */
   businessLine?: BusinessLine | null;
-  /** PX5: serviço da venda (serviço) ou todos os serviços do plano; vazio em produto. Ausente = CRM antigo. */
+  /** PX5: todos os serviços do plano (ou o serviço da comanda antiga); vazio em produto. Ausente = CRM antigo. */
   services?: ServiceLineRef[];
   /** Profissional da venda, quando o CRM informar. */
   professionalName?: string;

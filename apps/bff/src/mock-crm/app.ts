@@ -118,7 +118,7 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
     const revenue = members.reduce((sum, item) => sum + (monthlyOf(item.patientId, group.serviceId) ?? 0), 0);
     const paying = members.filter((item) => monthlyOf(item.patientId, group.serviceId) !== null).length;
     const freeSeats = Math.max(0, group.capacity - members.length);
-    const ticket = paying > 0 ? revenue / paying : svc.priceInCents * 4;
+    const ticket = paying > 0 ? revenue / paying : svc.singleSessionPriceInCents * 4;
     const overdue = members.map((item) => overdueOf(item.patientId)).filter((item): item is MemberOverdue => Boolean(item));
     return {
       id: group.id,
@@ -189,6 +189,7 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
       id: sale.id,
       sourceId: sale.sourceId,
       sourceType: sale.sourceType,
+      ...(sale.planKind ? { planKind: sale.planKind } : {}),
       kind: sale.kind,
       occurredAt: sale.occurredAt,
       patientId: sale.patientId,
