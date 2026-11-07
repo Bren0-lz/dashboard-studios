@@ -2,7 +2,10 @@ import { addDays, type BusinessLine, type GroupWeeklySlot } from "@dash/shared";
 
 /**
  * Dados de demonstração do CRM simulado: Pilates e Dança (Studio), Depilação e Limpeza de pele
- * (Estética). Tudo relativo a `today`, para a tela sempre ter atrasos, vendas e leads recentes.
+ * (Estética), Avaliação funcional sem classificação ("Outros") e Pilates Solo, inativo mas ainda
+ * com turma. Produtos de cada linha (um sem classificação), um plano combinado de Pilates + Limpeza
+ * de pele e um atraso lançado à mão, sem vínculo. Tudo relativo a `today`, para a tela sempre ter
+ * atrasos, vendas e leads recentes.
  */
 
 export interface MockUser {
@@ -22,7 +25,8 @@ export interface MockService {
   priceInCents: number;
   durationMinutes: number;
   color: string;
-  businessLine: BusinessLine;
+  /** PX3: `null` = sem classificação. */
+  businessLine: BusinessLine | null;
 }
 
 export interface MockPatient {
@@ -61,6 +65,8 @@ export interface MockPlan {
   id: string;
   patientId: string;
   serviceId: string;
+  /** Outros serviços do plano (plano combinado). */
+  extraServiceIds?: string[];
   name: string;
   status: "active" | "cancelled";
   validFrom: string;
@@ -79,6 +85,8 @@ export interface MockReceivable {
   paidAt?: string;
   /** Desconto dado na baixa. */
   discountInCents?: number;
+  /** Linhas dos produtos da comanda cobrada por esta parcela (PX5; `null` = sem classificação). */
+  productLines?: (BusinessLine | null)[];
 }
 
 export interface MockSale {
@@ -91,7 +99,10 @@ export interface MockSale {
   itemName: string;
   quantity: number;
   amountInCents: number;
-  serviceId: string;
+  /** Serviço vendido ou serviços do plano; vazio em produto. */
+  serviceIds: string[];
+  /** Venda de produto: linha do produto (`null` = sem classificação). */
+  productLine?: BusinessLine | null;
   professionalId?: string;
   /** Desconto do cliente na venda (`amountInCents` já vem com ele abatido). */
   customerDiscountInCents?: number;
@@ -178,8 +189,10 @@ export function createDemoState(today: string): MockState {
     { id: id("51", 2), name: "Dançaterapia", active: true, priceInCents: 7000, durationMinutes: 60, color: "#c96f50", businessLine: "studio" },
     { id: id("51", 3), name: "Depilação a laser", active: true, priceInCents: 15000, durationMinutes: 30, color: "#b85d53", businessLine: "aesthetics" },
     { id: id("51", 4), name: "Limpeza de pele", active: true, priceInCents: 18000, durationMinutes: 60, color: "#d3a349", businessLine: "aesthetics" },
+    { id: id("51", 5), name: "Avaliação funcional", active: true, priceInCents: 12000, durationMinutes: 45, color: "#6d7a8c", businessLine: null },
+    { id: id("51", 6), name: "Pilates Solo", active: false, priceInCents: 8000, durationMinutes: 60, color: "#4c8a6f", businessLine: "studio" },
   ];
-  const [pilates, danca, laser, pele] = services as [MockService, MockService, MockService, MockService];
+  const [pilates, danca, laser, pele, avaliacao, solo] = services as [MockService, MockService, MockService, MockService, MockService, MockService];
   const professionals = [
     { id: id("52", 1), fullName: "Aryana Mendes", active: true, color: "#26705f" },
     { id: id("52", 2), fullName: "Bruno Castro", active: true, color: "#c96f50" },
@@ -216,6 +229,8 @@ export function createDemoState(today: string): MockState {
     { id: id("55", 6), branchId: branches[1]!.id, name: "Dança Sex 15h", active: true, serviceId: danca.id, professionalId: professionals[1]!.id, roomId: rooms[1]!.id, capacity: 10, weeklySlots: slots([5], "15:00") },
     { id: id("55", 7), branchId: branches[0]!.id, name: "Laser Qua 14h", active: true, serviceId: laser.id, professionalId: professionals[2]!.id, roomId: rooms[2]!.id, capacity: 4, weeklySlots: slots([3], "14:00", 120) },
     { id: id("55", 8), branchId: branches[1]!.id, name: "Limpeza de pele Sáb 10h", active: true, serviceId: pele.id, professionalId: professionals[2]!.id, roomId: rooms[2]!.id, capacity: 3, weeklySlots: slots([6], "10:00", 90) },
+    // Turma de serviço inativo: some de `/services`, mas continua na lista de turmas com a linha.
+    { id: id("55", 9), branchId: branches[0]!.id, name: "Pilates Solo Sex 10h", active: true, serviceId: solo.id, professionalId: professionals[0]!.id, roomId: rooms[0]!.id, capacity: 6, weeklySlots: slots([5], "10:00") },
   ];
   // Inscritos por turma (ativos) e lista de espera da turma.
   const layout: [number, number][] = [
@@ -227,6 +242,7 @@ export function createDemoState(today: string): MockState {
     [3, 0],
     [3, 1],
     [1, 0],
+    [2, 0],
   ];
   const enrollments: MockEnrollment[] = [];
   const plans: MockPlan[] = [];
@@ -281,7 +297,7 @@ export function createDemoState(today: string): MockState {
         itemName: `${service.name} ${group.weeklySlots.length}x/semana`,
         quantity: 1,
         amountInCents: monthly * 3,
-        serviceId: service.id,
+        serviceIds: [service.id],
         professionalId: group.professionalId,
       });
     }
@@ -289,7 +305,7 @@ export function createDemoState(today: string): MockState {
   // Vendas avulsas recentes (sessões e procedimentos) para o gráfico diário.
   for (let day = 0; day < 75; day += 1) {
     if (day % 3 === 2) continue;
-    const service = services[(day * 5) % services.length]!;
+    const service = [pilates, danca, laser, pele][(day * 5) % 4]!;
     const patient = patients[(day * 11) % patients.length]!;
     counter += 1;
     sales.push({
@@ -302,11 +318,31 @@ export function createDemoState(today: string): MockState {
       itemName: service.name,
       quantity: 1,
       amountInCents: service.priceInCents * (1 + (day % 3)),
-      serviceId: service.id,
+      serviceIds: [service.id],
       professionalId: professionals[(day + 1) % professionals.length]!.id,
       ...(day % 4 === 0 && day % 17 !== 0 ? { customerDiscountInCents: 1_500 } : {}),
     });
   }
+  // Plano combinado (Pilates + Limpeza de pele): uma venda nas duas linhas, com parcela vencida.
+  const comboPatient = patients[44]!;
+  const comboPlanId = id("57", 900);
+  const comboFrom = addDays(today, -20);
+  plans.push({ id: comboPlanId, patientId: comboPatient.id, serviceId: pilates.id, extraServiceIds: [pele.id], name: "Combo Pilates + Limpeza de pele", status: "active", validFrom: comboFrom, validUntil: addDays(today, 70), monthlyInCents: 50000, totalValueInCents: 50000 });
+  receivables.push({ id: id("58", 9000), patientId: comboPatient.id, planId: comboPlanId, dueDate: addDays(today, -10), amountInCents: 50000, status: "open" });
+  sales.push({ id: id("59", 900), sourceId: comboPlanId, sourceType: "plan", kind: "sale", occurredAt: `${comboFrom}T14:00:00.000Z`, patientId: comboPatient.id, itemName: "Combo Pilates + Limpeza de pele", quantity: 1, amountInCents: 50000, serviceIds: [pilates.id, pele.id], professionalId: professionals[0]!.id });
+  // Avaliação funcional (serviço sem classificação) e produtos de cada linha, vendidos no mês.
+  sales.push({ id: id("59", 901), sourceId: id("60", 901), sourceType: "service", kind: "sale", occurredAt: iso(-3), patientId: patients[30]!.id, itemName: avaliacao.name, quantity: 1, amountInCents: avaliacao.priceInCents, serviceIds: [avaliacao.id], professionalId: professionals[0]!.id });
+  const products: [string, BusinessLine | null, number][] = [
+    ["Meia antiderrapante", "studio", 3500],
+    ["Óleo corporal", "aesthetics", 6900],
+    ["Vale-presente", null, 10000],
+  ];
+  products.forEach(([name, line, price], index) =>
+    sales.push({ id: id("59", 910 + index), sourceId: id("65", index + 1), sourceType: "product", kind: "sale", occurredAt: iso(-(index + 1)), patientId: patients[20 + index]!.id, itemName: name, quantity: 1, amountInCents: price, serviceIds: [], productLine: line }),
+  );
+  // Comanda de produto sem classificação vencida (só "Outros") e parcela lançada à mão, sem vínculo (só "Tudo").
+  receivables.push({ id: id("58", 9001), patientId: patients[45]!.id, dueDate: addDays(today, -6), amountInCents: 10000, status: "open", productLines: [null] });
+  receivables.push({ id: id("58", 9002), patientId: patients[47]!.id, dueDate: addDays(today, -15), amountInCents: 7000, status: "open" });
   const waitlist: MockWaitlistEntry[] = [
     [40, pilates.id, 12, "Prefere à noite"],
     [41, pilates.id, 8, ""],

@@ -26,7 +26,7 @@ externa. Cada tela responde a uma pergunta de venda e termina numa ação:
 | **Back-end / integração de sistemas** | Servidor Fastify no padrão **BFF** (_backend for frontend_) que consome a API do CRM, monta cada tela pronta e esconde as credenciais do navegador.                                                    |
 | **Dados e validação**                 | Respostas do CRM validadas com Zod ([`crm-schemas.ts`](packages/shared/src/crm-schemas.ts)); regras de negócio puras e testadas ([`rules.ts`](packages/shared/src/rules.ts)); exportação CSV.          |
 | **Segurança**                         | Sessão em cookie `httpOnly`/`SameSite`, proteção **CSRF** com comparação em tempo constante, chave da API só no servidor e ações filtradas pelas permissões do usuário no CRM.                        |
-| **Testes automatizados**              | 77 testes com Vitest: regras de negócio, BFF contra um CRM simulado e telas com Testing Library usando o BFF real em memória.                                                                          |
+| **Testes automatizados**              | 91 testes com Vitest: regras de negócio, BFF contra um CRM simulado e telas com Testing Library usando o BFF real em memória.                                                                          |
 | **Visualização de dados e design**    | Gráficos com Recharts, mapa de calor de ocupação, cores com significado fixo (ocupado, parcial, vazio, faixas de atraso) e os mesmos tokens visuais do CRM.                                            |
 
 ---
@@ -122,11 +122,19 @@ real não os oferece, o painel se adapta:
 | Recurso no CRM                                    | Enquanto não existir                                                                             |
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | `businessLine` em serviços, turmas e vendas       | Tudo aparece como Studio, com aviso na tela                                                      |
+| `services`/`productLines` em vendas e atrasos (PX5) | A linha volta a sair da venda ou da turma do cliente; com serviços escolhidos, as vendas zeram (com aviso) |
 | `POST /groups/:id/waitlist/:enrollmentId/promote` | O botão "Promover" avisa que o CRM ainda não oferece; cancelar uma inscrição continua promovendo |
 | `GET /external/v1/plan-templates`                 | "Vender plano" some; fica só "inscrever"                                                         |
 | `GET /external/v1/branches`                       | O seletor de filial some e o painel mostra a rede toda                                           |
 | Profissional da venda em `SaleMovement`           | O ranking por profissional fica vazio                                                            |
 | Calendário de encontros (`/group-sessions`)       | O calendário usa os horários fixos das turmas                                                    |
+
+Filtro do topo: linha (Tudo, Studio, Estética, Outros = sem classificação no CRM) e serviços do
+CRM (vários ao mesmo tempo, agrupados por linha; o inativo que ainda tem turma aparece marcado),
+em `?linha=` e `?servicos=` na URL, valendo em todas as telas. Plano com serviços de duas linhas
+aparece nas duas com o valor inteiro, e o total de uma seleção conta cada venda uma vez; produto
+entra pela linha do próprio produto; atraso sem vínculo (parcela lançada à mão) só aparece em "Tudo"
+(`UNLINKED_LINE` em [`business-line.ts`](packages/shared/src/business-line.ts)).
 
 Filiais: com mais de uma filial, o seletor no topo (`?filial=` na URL) manda `X-Branch-Id` em
 todas as chamadas, e o servidor também filtra turmas e lista de espera pelo `branchId`.

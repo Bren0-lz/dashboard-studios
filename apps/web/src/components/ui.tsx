@@ -1,8 +1,9 @@
 import { AlertTriangle, Inbox, MessageCircle, RefreshCw, X } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
 import {
-  businessLineLabels,
   formatMoney,
+  lineKeyLabels,
+  lineKeyOf,
   occupancyTone,
   overdueTone,
   plural,
@@ -66,8 +67,10 @@ export function Notice({ children, tone = "info" }: { children: ReactNode; tone?
   );
 }
 
-export function LinePill({ line }: { line: BusinessLine }) {
-  return <span className={`line-pill line-${line}`}>{businessLineLabels[line]}</span>;
+/** `null` = sem classificação no CRM ("Outros"). */
+export function LinePill({ line }: { line: BusinessLine | null }) {
+  const key = lineKeyOf(line);
+  return <span className={`line-pill line-${key}`}>{lineKeyLabels[key]}</span>;
 }
 
 export function OccupancyBar({ enrolled, capacity, percent }: { enrolled: number; capacity: number; percent: number }) {

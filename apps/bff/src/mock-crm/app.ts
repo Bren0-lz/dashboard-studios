@@ -34,6 +34,11 @@ export interface MockCrmOptions {
   withoutBranches?: boolean;
   /** Simula um CRM sem a PX4 (lista de turmas sem `memberNames`). */
   withoutMemberNames?: boolean;
+  /**
+   * Simula um CRM sem a PX5: vendas sem `services` (com a linha do serviço em toda venda, como na
+   * fase 0) e inadimplência sem `services`/`productLines` (com a linha da 1ª turma do cliente).
+   */
+  withoutLineDetails?: boolean;
 }
 
 const PREFIX = "/api/external/v1";
@@ -46,6 +51,7 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
   const today = options.today ?? todayInClinic();
   const state = options.state ?? createDemoState(today);
   const phase0 = !options.withoutPhase0;
+  const lineDetails = phase0 && !options.withoutLineDetails;
   const tokens = new Map<string, string>();
   const app = Fastify({ logger: false });
 
@@ -86,7 +92,7 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
   }
 
   function monthlyOf(patientId: string, serviceId: string): number | null {
-    const plan = state.plans.find((item) => item.patientId === patientId && item.serviceId === serviceId && item.status === "active");
+    const plan = state.plans.find((item) => item.patientId === patientId && (item.serviceId === serviceId || item.extraServiceIds?.includes(serviceId)) && item.status === "active");
     return plan ? plan.monthlyInCents : null;
   }
 
@@ -165,6 +171,12 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
     if (next) next.status = "active";
   }
 
+  /** Serviço com a linha do cadastro (inclusive inativo), como no CRM (PX5). */
+  const serviceRef = (serviceId: string) => {
+    const svc = service(serviceId);
+    return { id: serviceId, name: svc?.name ?? "Serviço", businessLine: svc?.businessLine ?? null };
+  };
+
   function saleMovement(sale: MockState["sales"][number]): SaleMovement {
     return {
       id: sale.id,
@@ -178,7 +190,11 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
       quantity: sale.quantity,
       amountInCents: sale.amountInCents,
       ...(sale.customerDiscountInCents ? { customerDiscountInCents: sale.customerDiscountInCents } : {}),
-      ...(phase0 ? { businessLine: service(sale.serviceId)?.businessLine ?? "studio" } : {}),
+      ...(lineDetails
+        ? { services: sale.serviceIds.map(serviceRef), ...(sale.sourceType === "product" ? { businessLine: sale.productLine ?? null } : {}) }
+        : phase0
+          ? { businessLine: (sale.serviceIds[0] ? service(sale.serviceIds[0])?.businessLine : sale.productLine) ?? "studio" }
+          : {}),
       ...(sale.professionalId ? { professionalName: professional(sale.professionalId)?.fullName ?? "" } : {}),
     };
   }
@@ -351,7 +367,10 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
     return reply.status(201).send(created);
   });
 
-  app.get(`${PREFIX}/services`, async () => state.services.map(({ businessLine, ...item }) => ({ ...item, clinicId: state.clinic.id, ...(phase0 ? { businessLine } : {}) })));
+  // Como no CRM (PX3): só os serviços ativos, com a linha (`null` = sem classificação).
+  app.get(`${PREFIX}/services`, async () =>
+    state.services.filter((item) => item.active).map(({ businessLine, ...item }) => ({ ...item, clinicId: state.clinic.id, ...(phase0 ? { businessLine } : {}) })),
+  );
   app.get(`${PREFIX}/professionals`, async () => state.professionals);
   app.get(`${PREFIX}/plan-catalog`, async () => []);
   if (phase0) app.get(`${PREFIX}/plan-templates`, async () => state.planTemplates);
@@ -367,12 +386,12 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
     const template = state.planTemplates.find((item) => item.id === plan?.planTemplateId);
     if (!plan?.patientId || !template || !plan.validFrom || !plan.firstDueDate || !plan.installments) return fail(reply, 400, "VALIDATION", "Dados do plano incompletos.");
     const planId = randomUUID();
-    const serviceId = template.services[0]!.serviceId;
+    const [serviceId, ...extraServiceIds] = template.services.map((item) => item.serviceId) as [string, ...string[]];
     const months = template.planType === "quarterly" ? 3 : 1;
-    state.plans.push({ id: planId, patientId: plan.patientId, serviceId, name: template.name, status: "active", validFrom: plan.validFrom, ...(plan.validUntil ? { validUntil: plan.validUntil } : {}), monthlyInCents: Math.round(template.totalValueInCents / months), totalValueInCents: template.totalValueInCents });
+    state.plans.push({ id: planId, patientId: plan.patientId, serviceId, ...(extraServiceIds.length ? { extraServiceIds } : {}), name: template.name, status: "active", validFrom: plan.validFrom, ...(plan.validUntil ? { validUntil: plan.validUntil } : {}), monthlyInCents: Math.round(template.totalValueInCents / months), totalValueInCents: template.totalValueInCents });
     for (let i = 0; i < plan.installments; i += 1)
       state.receivables.push({ id: randomUUID(), patientId: plan.patientId, planId, dueDate: plan.firstDueDate, amountInCents: Math.round(template.totalValueInCents / plan.installments), status: "open" });
-    state.sales.push({ id: randomUUID(), sourceId: planId, sourceType: "plan", kind: "sale", occurredAt: new Date().toISOString(), patientId: plan.patientId, itemName: template.name, quantity: 1, amountInCents: template.totalValueInCents, serviceId });
+    state.sales.push({ id: randomUUID(), sourceId: planId, sourceType: "plan", kind: "sale", occurredAt: new Date().toISOString(), patientId: plan.patientId, itemName: template.name, quantity: 1, amountInCents: template.totalValueInCents, serviceIds: [serviceId, ...extraServiceIds] });
     let enrollment;
     if (body.groupId) {
       const group = state.groups.find((item) => item.id === body.groupId);
@@ -452,6 +471,17 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
             return { groupId: group.id, groupName: group.name, full: row.freeSeats <= 0, waitlistCount: row.waitlistCount };
           });
         const firstGroup = state.groups.find((group) => group.id === groups[0]?.groupId);
+        // PX5: serviços e linhas de produto das parcelas vencidas; parcela lançada à mão não tem vínculo.
+        const due = state.receivables.filter((item) => item.patientId === patientId && item.status === "open" && item.dueDate < today);
+        const serviceIds = [
+          ...new Set(
+            due.flatMap((item) => {
+              const plan = state.plans.find((entry) => entry.id === item.planId);
+              return plan ? [plan.serviceId, ...(plan.extraServiceIds ?? [])] : [];
+            }),
+          ),
+        ];
+        const productLines = [...new Set(due.flatMap((item) => item.productLines ?? []))];
         return {
           patientId,
           patientName: person.fullName,
@@ -459,7 +489,9 @@ export function buildMockCrm(options: MockCrmOptions): { app: FastifyInstance; s
           groups,
           ...overdue,
           band: overdueBand(overdue.daysOverdue) ?? "1-7",
-          businessLine: firstGroup ? (service(firstGroup.serviceId)?.businessLine ?? "studio") : "studio",
+          ...(lineDetails
+            ? { services: serviceIds.map(serviceRef), productLines }
+            : { businessLine: firstGroup ? (service(firstGroup.serviceId)?.businessLine ?? "studio") : "studio" }),
           ...(state.chargeContacts[patientId] ? { lastContactAt: state.chargeContacts[patientId] } : {}),
         };
       });

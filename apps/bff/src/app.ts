@@ -6,7 +6,7 @@ import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest }
 import {
   addDays,
   monthStart,
-  parseLineFilter,
+  parsePanelFilter,
   planValidUntil,
   todayInClinic,
   type BranchesResponse,
@@ -26,6 +26,7 @@ import { fileGoalsStore, type GoalsStore } from "./goals-store.js";
 import { capabilitiesOf } from "./permissions.js";
 import { SESSION_TTL_MS, SessionStore, type Session } from "./sessions.js";
 import {
+  filtersScreen,
   goalFor,
   groupsScreen,
   leadsScreen,
@@ -85,7 +86,7 @@ const leadContactSchema = z.object({
   notes: z.string().trim().min(2, "Descreva o contato.").max(2000),
 });
 const leadConvertSchema = z.object({ cpf: z.string().trim().min(11, "Informe o CPF.") });
-const periodQuery = z.object({ from: isoDate.optional(), to: isoDate.optional(), linha: z.string().optional() });
+const periodQuery = z.object({ from: isoDate.optional(), to: isoDate.optional(), linha: z.string().optional(), servicos: z.string().optional() });
 
 function sendError(reply: FastifyReply, status: number, code: string, message: string, details?: unknown) {
   return reply.status(status).send({ code, message, ...(details ? { details } : {}) });
@@ -165,7 +166,8 @@ export async function buildApp(config: Config, deps: AppDeps = {}): Promise<Fast
     pixKey: config.pixKey,
     seeFinance: capabilitiesOf(request.session!.user).seeFinance,
   });
-  const lineOfQuery = (request: FastifyRequest) => parseLineFilter((request.query as Record<string, unknown>).linha);
+  /** Filtro do topo (PT6): `?linha=` e `?servicos=id1,id2`. */
+  const filterOfQuery = (request: FastifyRequest) => parsePanelFilter(request.query as Record<string, unknown>);
   const sessionInfo = (session: Session): SessionInfo => ({
     user: { id: session.user.id, fullName: session.user.fullName, email: session.user.email },
     can: capabilitiesOf(session.user),
@@ -210,9 +212,11 @@ export async function buildApp(config: Config, deps: AppDeps = {}): Promise<Fast
     };
   });
 
-  app.get("/api/overview", async (request) => overviewScreen(ctxOf(request), lineOfQuery(request), await goals.read()));
+  app.get("/api/overview", async (request) => overviewScreen(ctxOf(request), filterOfQuery(request), await goals.read()));
 
-  app.get("/api/groups", async (request) => groupsScreen(ctxOf(request), lineOfQuery(request)));
+  app.get("/api/filters", async (request) => filtersScreen(ctxOf(request)));
+
+  app.get("/api/groups", async (request) => groupsScreen(ctxOf(request), filterOfQuery(request)));
 
   app.get("/api/groups/:id", async (request) => {
     const { id } = request.params as { id: string };
@@ -318,7 +322,7 @@ export async function buildApp(config: Config, deps: AppDeps = {}): Promise<Fast
     return gatewayOf(request).write("POST", "/patients", { ...input, tags: [] });
   });
 
-  app.get("/api/waitlist", async (request) => waitlistScreen(ctxOf(request), lineOfQuery(request)));
+  app.get("/api/waitlist", async (request) => waitlistScreen(ctxOf(request), filterOfQuery(request)));
 
   app.post("/api/waitlist", async (request) => {
     const input = waitlistCreateSchema.parse(request.body);
@@ -350,7 +354,7 @@ export async function buildApp(config: Config, deps: AppDeps = {}): Promise<Fast
 
   app.get("/api/overdue", async (request) => {
     const { turma } = z.object({ turma: z.string().trim().max(64).optional() }).parse(request.query);
-    return overdueScreen(ctxOf(request), lineOfQuery(request), turma || undefined);
+    return overdueScreen(ctxOf(request), filterOfQuery(request), turma || undefined);
   });
 
   app.get("/api/leads", async (request) => {
@@ -380,7 +384,7 @@ export async function buildApp(config: Config, deps: AppDeps = {}): Promise<Fast
     const from = query.from ?? monthStart(to.slice(0, 7));
     if (from > to) throw new CrmError(400, "validation", "A data inicial deve ser anterior à final.");
     if (addDays(from, 366) < to) throw new CrmError(400, "validation", "Escolha um período de até um ano.");
-    return { from, to, line: parseLineFilter(query.linha) };
+    return { from, to, line: parsePanelFilter(query) };
   };
 
   app.get("/api/sales", async (request) => {

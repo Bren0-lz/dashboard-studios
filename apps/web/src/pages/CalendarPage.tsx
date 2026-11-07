@@ -17,7 +17,7 @@ import {
   type GroupsResponse,
 } from "@dash/shared";
 import { EmptyState, ErrorBanner, Modal, PageHeader, Skeleton } from "../components/ui";
-import { useLineFilter, withLine } from "../lib/filters";
+import { usePanelFilter, withFilter } from "../lib/filters";
 import { useGroupFlow } from "../lib/useGroupFlow";
 import { useRemote } from "../lib/useRemote";
 
@@ -98,10 +98,10 @@ function seatsLabel(group: GroupRow) {
 }
 
 export function CalendarPage() {
-  const [line] = useLineFilter();
+  const [filter] = usePanelFilter();
   const [params, setParams] = useSearchParams();
   const view = (views.some(([value]) => value === params.get("vista")) ? params.get("vista") : "semana") as View;
-  const groups = useRemote<GroupsResponse>(withLine("/groups", line));
+  const groups = useRemote<GroupsResponse>(withFilter("/groups", filter));
   const flow = useGroupFlow(groups.data?.features.planSale ?? false, groups.reload);
   const [selectedDate, setSelectedDate] = useState(todayInClinic);
   const [dayLayout, setDayLayout] = useState<DayLayout>("grade");

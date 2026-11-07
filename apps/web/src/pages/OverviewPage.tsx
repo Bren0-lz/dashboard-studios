@@ -12,7 +12,7 @@ import {
 } from "@dash/shared";
 import { DailySalesChart } from "../components/charts";
 import { EmptyState, ErrorBanner, Kpi, Modal, Notice, PageHeader, Skeleton, WhatsAppButton } from "../components/ui";
-import { useLineFilter, withLine } from "../lib/filters";
+import { usePanelFilter, withFilter } from "../lib/filters";
 import { useAction } from "../lib/useAction";
 import { useRemote } from "../lib/useRemote";
 
@@ -26,12 +26,12 @@ const kindLabels: Record<Opportunity["kind"], string> = {
 };
 
 export function OverviewPage() {
-  const [line] = useLineFilter();
+  const [filter] = usePanelFilter();
   const navigate = useNavigate();
-  const overview = useRemote<OverviewResponse>(withLine("/overview", line));
+  const overview = useRemote<OverviewResponse>(withFilter("/overview", filter));
   const goals = useRemote<Goals & { canEdit: boolean }>("/goals");
   const [editingGoals, setEditingGoals] = useState(false);
-  const go = (path: string) => navigate(withLine(path, line));
+  const go = (path: string) => navigate(withFilter(path, filter));
   const data = overview.data;
 
   return (
@@ -145,13 +145,16 @@ export function OverviewPage() {
                 ) : null}
               </div>
               <div className="panel-body">
-                <DailySalesChart data={data.dailySales} line={line} />
-                {!data.goal && goals.data?.canEdit ? <Notice>Defina a meta do mês para acompanhar quanto falta por dia útil.</Notice> : null}
+                <DailySalesChart data={data.dailySales} filter={filter} />
+                {!data.goal && goals.data?.canEdit && filter.services.length === 0 && filter.line !== "other" ? <Notice>Defina a meta do mês para acompanhar quanto falta por dia útil.</Notice> : null}
               </div>
             </section>
           </div>
           {!data.features.businessLine ? (
             <Notice tone="warning">O CRM ainda não informa a linha de negócio dos serviços: tudo aparece como Studio até a atualização do CRM.</Notice>
+          ) : null}
+          {data.features.saleServices === false && filter.services.length > 0 ? (
+            <Notice tone="warning">O CRM ainda não informa os serviços de cada venda: com serviços escolhidos, o faturamento fica zerado até a atualização do CRM.</Notice>
           ) : null}
         </>
       ) : null}

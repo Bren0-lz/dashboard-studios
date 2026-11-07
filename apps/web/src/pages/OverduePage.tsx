@@ -13,18 +13,18 @@ import {
   type OverdueRowView,
 } from "@dash/shared";
 import { EmptyState, ErrorBanner, Kpi, Notice, PageHeader, Skeleton, WhatsAppButton } from "../components/ui";
-import { globalFilters, useLineFilter, withLine } from "../lib/filters";
+import { globalFilters, usePanelFilter, withFilter } from "../lib/filters";
 import { useSession } from "../lib/session";
 import { useRemote } from "../lib/useRemote";
 
 export function OverduePage() {
-  const [line] = useLineFilter();
+  const [filter] = usePanelFilter();
   const { session } = useSession();
   const location = useLocation();
   const [params] = useSearchParams();
   // `?turma=`: aberta pelo "Pagamentos atrasados" do cartão da turma.
   const groupId = params.get("turma") ?? "";
-  const path = withLine(groupId ? `/overdue?turma=${encodeURIComponent(groupId)}` : "/overdue", line);
+  const path = withFilter(groupId ? `/overdue?turma=${encodeURIComponent(groupId)}` : "/overdue", filter);
   const overdue = useRemote<OverdueResponse>(session.can.seeFinance ? path : null);
   const data = overdue.data;
 

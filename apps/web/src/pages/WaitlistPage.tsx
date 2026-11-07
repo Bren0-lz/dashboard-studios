@@ -13,15 +13,15 @@ import {
 } from "@dash/shared";
 import { PatientPicker } from "../components/EnrollDialog";
 import { ConfirmDialog, EmptyState, ErrorBanner, Modal, Notice, PageHeader, Skeleton, WhatsAppButton, LinePill } from "../components/ui";
-import { useLineFilter, withLine } from "../lib/filters";
+import { usePanelFilter, withFilter } from "../lib/filters";
 import { useSession } from "../lib/session";
 import { useAction } from "../lib/useAction";
 import { useRemote } from "../lib/useRemote";
 
 export function WaitlistPage() {
-  const [line] = useLineFilter();
+  const [filter] = usePanelFilter();
   const { session } = useSession();
-  const list = useRemote<WaitlistResponse>(withLine("/waitlist", line));
+  const list = useRemote<WaitlistResponse>(withFilter("/waitlist", filter));
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<WaitlistRow | null>(null);
   const [removing, setRemoving] = useState<WaitlistRow | null>(null);

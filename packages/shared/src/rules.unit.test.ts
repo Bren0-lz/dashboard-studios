@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { groupRowSchema, serviceSchema } from "./crm-schemas.js";
-import { lineOf, matchesLine } from "./business-line.js";
 import type { ExternalGroupRow, WaitlistEntry } from "./crm-types.js";
 import { initials, memberBubbles, seatsLabel, slotLabel } from "./format.js";
 import {
@@ -22,6 +21,7 @@ import { occupancyTone, dayPeriodOf } from "./occupancy.js";
 import { whatsappLink, chargeMessage } from "./whatsapp.js";
 import { formatMoney, shortDate } from "./format.js";
 import { workingDaysBetween } from "./dates.js";
+import { lineKeyOf, lineOf, matchesFilter, parsePanelFilter, saleTags, type PanelFilter } from "./business-line.js";
 
 function group(overrides: Partial<ExternalGroupRow>): ExternalGroupRow {
   return {
@@ -281,6 +281,38 @@ describe("cartão da turma", () => {
   });
 });
 
+describe("filtro por linha e serviço (PT6)", () => {
+  const filter = (line: PanelFilter["line"], services: string[] = []): PanelFilter => ({ line, services });
+
+  it("linha, vários serviços e Tudo", () => {
+    const tags = { lines: ["studio", "aesthetics"] as const, services: ["pilates", "pele"] };
+    const item = { lines: [...tags.lines], services: tags.services };
+    expect(matchesFilter(item, filter("all"))).toBe(true);
+    expect(matchesFilter(item, filter("studio"))).toBe(true);
+    expect(matchesFilter(item, filter("aesthetics"))).toBe(true);
+    expect(matchesFilter(item, filter("other"))).toBe(false);
+    expect(matchesFilter(item, filter("all", ["danca", "pele"]))).toBe(true);
+    expect(matchesFilter(item, filter("all", ["danca"]))).toBe(false);
+  });
+
+  it("item sem vínculo só aparece em Tudo", () => {
+    const unlinked = { lines: [], services: [] };
+    expect(matchesFilter(unlinked, filter("all"))).toBe(true);
+    for (const line of ["studio", "aesthetics", "other"] as const) expect(matchesFilter(unlinked, filter(line))).toBe(false);
+    expect(matchesFilter(unlinked, filter("all", ["pilates"]))).toBe(false);
+  });
+
+  it("venda: plano pelos serviços, produto pela própria linha, CRM antigo pela linha da venda", () => {
+    const ref = (id: string, businessLine: "studio" | "aesthetics" | null) => ({ id, name: id, businessLine });
+    expect(saleTags({ sourceType: "plan", services: [ref("pilates", "studio"), ref("pele", "aesthetics")] })).toEqual({ lines: ["studio", "aesthetics"], services: ["pilates", "pele"] });
+    expect(saleTags({ sourceType: "product", services: [], businessLine: null })).toEqual({ lines: ["other"], services: [] });
+    expect(saleTags({ sourceType: "product", services: [], businessLine: "aesthetics" })).toEqual({ lines: ["aesthetics"], services: [] });
+    expect(saleTags({ sourceType: "service" })).toEqual({ lines: ["studio"], services: [] });
+    expect(parsePanelFilter({ linha: "other", servicos: "a,b,a," })).toEqual({ line: "other", services: ["a", "b"] });
+    expect(parsePanelFilter({ linha: "dance" })).toEqual({ line: "all", services: [] });
+  });
+});
+
 describe("linha sem classificação (CRM com PX3)", () => {
   const group = {
     id: "g1",
@@ -310,10 +342,10 @@ describe("linha sem classificação (CRM com PX3)", () => {
     expect(groupRowSchema.safeParse({ ...group, businessLine: "dance" }).success).toBe(false);
   });
 
-  it("trata a linha null como Studio até o filtro Outros existir", () => {
-    expect(lineOf({ businessLine: null })).toBe("studio");
-    expect(matchesLine({ businessLine: null }, "studio")).toBe(true);
-    expect(matchesLine({ businessLine: null }, "aesthetics")).toBe(false);
-    expect(matchesLine({ businessLine: null }, "all")).toBe(true);
+  it("trata a linha null como Outros e a ausente (CRM antigo) como Studio", () => {
+    expect(lineOf({ businessLine: null })).toBeNull();
+    expect(lineKeyOf(null)).toBe("other");
+    expect(lineOf({})).toBe("studio");
+    expect(lineKeyOf(undefined)).toBe("studio");
   });
 });

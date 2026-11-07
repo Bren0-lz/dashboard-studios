@@ -1,6 +1,5 @@
 import {
   addDays,
-  businessLines,
   buildOpportunities,
   chargeMessage,
   compatibleGroups,
@@ -11,26 +10,38 @@ import {
   isActiveWaitlist,
   leadFollowUpMessage,
   leadIdleDays,
-  lineOf,
-  matchesLine,
+  emptyPanelFilter,
+  isFilterActive,
+  lineKeyLabels,
+  lineKeyOf,
+  lineKeys,
+  matchesFilter,
   monthEnd,
   monthStart,
   overdueBands,
   previousMonth,
   renewalMessage,
+  saleTags,
   toOverdueView,
+  uniqueLines,
   waitlistPosition,
   whatsappLink,
   type BusinessLine,
   type CrmFeatures,
+  type DailySales,
   type ExternalGroupRow,
+  type ExternalOverdueRow,
+  type FilterTags,
+  type FiltersResponse,
   type Goals,
   type GroupsResponse,
   type LeadsResponse,
   type LineFilter,
+  type LineKey,
   type OverdueResponse,
   type OverdueRowView,
   type OverviewResponse,
+  type PanelFilter,
   type SaleMovement,
   type SalesRankingItem,
   type SalesReportPeriod,
@@ -49,36 +60,70 @@ export interface ScreenContext {
   seeFinance: boolean;
 }
 
-/** Linha do item da lista de espera: a do serviço aguardado (sem fase 0, Studio). */
-function serviceLines(services: readonly Service[]): Map<string, BusinessLine> {
-  return new Map(services.map((service) => [service.id, lineOf(service)]));
+/**
+ * Linha de cada serviço: a do cadastro (`/services`, só os ativos) e, para serviço inativo que
+ * ainda tem turma, a da turma. `legacy`: o CRM ainda não informa linha nenhuma (tudo é Studio).
+ */
+interface ServiceIndex {
+  lines: Map<string, LineKey>;
+  legacy: boolean;
+}
+
+function serviceIndex(services: readonly Service[], groups: readonly ExternalGroupRow[]): ServiceIndex {
+  const lines = new Map(services.map((service) => [service.id, lineKeyOf(service.businessLine)] as const));
+  for (const group of groups) if (!lines.has(group.serviceId)) lines.set(group.serviceId, lineKeyOf(group.businessLine));
+  return { lines, legacy: !services.some((service) => service.businessLine !== undefined) && !groups.some((group) => group.businessLine !== undefined) };
+}
+
+const toBusinessLine = (line: LineKey | undefined): BusinessLine | null => (line === undefined || line === "other" ? null : line);
+
+const groupTags = (group: ExternalGroupRow): FilterTags => ({ lines: [lineKeyOf(group.businessLine)], services: [group.serviceId] });
+
+/** Espera: pelo serviço aguardado. Produto não tem linha na lista de espera: sem vínculo (só "Tudo"). */
+function waitlistTags(entry: WaitlistEntry, index: ServiceIndex): FilterTags {
+  const line = entry.serviceId ? index.lines.get(entry.serviceId) : undefined;
+  if (index.legacy) return { lines: ["studio"], services: entry.serviceId ? [entry.serviceId] : [] };
+  return { lines: line ? [line] : [], services: entry.serviceId ? [entry.serviceId] : [] };
+}
+
+/**
+ * Atraso: pelos serviços e linhas de produto das parcelas (PX5). Sem esses campos (CRM antigo),
+ * como antes: a linha informada pelo CRM ou a das turmas do cliente (sem turma, Studio).
+ */
+function overdueTags(row: ExternalOverdueRow, groups: ReadonlyMap<string, ExternalGroupRow>): FilterTags {
+  if (row.services !== undefined)
+    return {
+      lines: uniqueLines([...row.services.map((item) => lineKeyOf(item.businessLine ?? null)), ...(row.productLines ?? []).map((line) => lineKeyOf(line))]),
+      services: row.services.map((item) => item.id),
+    };
+  const known = row.groups.map((item) => groups.get(item.groupId)).filter((group): group is ExternalGroupRow => Boolean(group));
+  const services = [...new Set(known.map((group) => group.serviceId))];
+  if (row.businessLine !== undefined) return { lines: [lineKeyOf(row.businessLine)], services };
+  if (row.groups.length === 0) return { lines: ["studio"], services };
+  return { lines: uniqueLines(row.groups.map((item) => lineKeyOf(groups.get(item.groupId)?.businessLine))), services };
 }
 
 function features(groups: readonly ExternalGroupRow[], overdueAvailable: boolean, planSale: boolean): CrmFeatures {
   return { businessLine: groups.some((group) => group.businessLine !== undefined), overdue: overdueAvailable, planSale };
 }
 
-async function loadOverdue(ctx: ScreenContext, groups: readonly ExternalGroupRow[], line: LineFilter) {
+async function loadOverdue(ctx: ScreenContext, groups: readonly ExternalGroupRow[], filter: PanelFilter) {
   if (!ctx.seeFinance) return { available: false, rows: [] as OverdueRowView[], referenceDate: ctx.today };
   const report = await ctx.gateway.overdue();
   if (!report) return { available: false, rows: [] as OverdueRowView[], referenceDate: ctx.today };
-  const lineGroups = new Map(groups.map((group) => [group.id, lineOf(group)]));
+  const byId = new Map(groups.map((group) => [group.id, group]));
   const rows = report.rows
-    .filter((row) => {
-      if (line === "all") return true;
-      if (row.businessLine) return row.businessLine === line;
-      return row.groups.length === 0 ? line === "studio" : row.groups.some((group) => (lineGroups.get(group.groupId) ?? "studio") === line);
-    })
+    .filter((row) => matchesFilter(overdueTags(row, byId), filter))
     .map((row) => toOverdueView(row, groups))
     .sort((a, b) => Number(b.atRisk) - Number(a.atRisk) || b.daysOverdue - a.daysOverdue);
   return { available: true, rows, referenceDate: report.referenceDate };
 }
 
 /** Os nomes das bolinhas do cartão (`memberNames`, PX4) vêm na própria lista do CRM: nenhuma leitura por turma. */
-export async function groupsScreen(ctx: ScreenContext, line: LineFilter): Promise<GroupsResponse> {
+export async function groupsScreen(ctx: ScreenContext, filter: PanelFilter): Promise<GroupsResponse> {
   const [overview, waitlist, templates] = await Promise.all([ctx.gateway.groups(), ctx.gateway.waitlist(), ctx.gateway.planTemplates()]);
   const overdue = ctx.seeFinance ? await ctx.gateway.overdue() : null;
-  const rows = enrichGroups(overview.groups.filter((group) => matchesLine(group, line)), waitlist).map((row) =>
+  const rows = enrichGroups(overview.groups.filter((group) => matchesFilter(groupTags(group), filter)), waitlist).map((row) =>
     ctx.seeFinance ? row : { ...row, overdueMembers: 0, overdueInCents: 0 },
   );
   const sum = (pick: (row: (typeof rows)[number]) => number) => rows.reduce((total, row) => total + pick(row), 0);
@@ -104,31 +149,31 @@ export async function groupsScreen(ctx: ScreenContext, line: LineFilter): Promis
   };
 }
 
-export async function waitlistScreen(ctx: ScreenContext, line: LineFilter): Promise<WaitlistResponse> {
+export async function waitlistScreen(ctx: ScreenContext, filter: PanelFilter): Promise<WaitlistResponse> {
   const [entries, overview, services] = await Promise.all([ctx.gateway.waitlist(), ctx.gateway.groups(), ctx.gateway.services()]);
-  const lines = serviceLines(services);
+  const index = serviceIndex(services, overview.groups);
   const rows = entries
     .filter(isActiveWaitlist)
+    .filter((entry) => matchesFilter(waitlistTags(entry, index), filter))
     .map((entry) => ({
       ...entry,
-      businessLine: entry.serviceId ? (lines.get(entry.serviceId) ?? "studio") : ("studio" as BusinessLine),
+      businessLine: toBusinessLine(waitlistTags(entry, index).lines[0]),
       position: waitlistPosition(entry, entries),
       waitingDays: Math.max(0, daysBetween(entry.createdAt.slice(0, 10), ctx.today)),
       compatibleGroups: compatibleGroups(entry, overview.groups),
     }))
-    .filter((row) => line === "all" || row.businessLine === line)
     .sort((a, b) => b.compatibleGroups.length - a.compatibleGroups.length || b.waitingDays - a.waitingDays);
   return {
     rows,
-    services: services.filter((service) => service.active && matchesLine(service, line)).map(({ id, name }) => ({ id, name })),
+    services: services.filter((service) => service.active && matchesFilter({ lines: [lineKeyOf(service.businessLine)], services: [service.id] }, filter)).map(({ id, name }) => ({ id, name })),
   };
 }
 
 /** `groupId`: só os clientes em atraso inscritos nessa turma (link do cartão da turma). */
-export async function overdueScreen(ctx: ScreenContext, line: LineFilter, groupId?: string): Promise<OverdueResponse> {
+export async function overdueScreen(ctx: ScreenContext, filter: PanelFilter, groupId?: string): Promise<OverdueResponse> {
   const overview = await ctx.gateway.groups();
-  // A turma já define a linha: o filtro de linha do cliente (a da 1ª turma dele) ficaria de fora.
-  const loaded = await loadOverdue(ctx, overview.groups, groupId ? "all" : line);
+  // A turma já define a linha e o serviço: o filtro do topo fica de fora (mesma contagem do cartão).
+  const loaded = await loadOverdue(ctx, overview.groups, groupId ? emptyPanelFilter : filter);
   const { available, referenceDate } = loaded;
   const rows = groupId ? loaded.rows.filter((row) => row.groups.some((group) => group.groupId === groupId)) : loaded.rows;
   const groupName = groupId
@@ -150,20 +195,25 @@ export async function overdueScreen(ctx: ScreenContext, line: LineFilter, groupI
 
 const signed = (sale: SaleMovement) => (sale.kind === "cancellation" ? -Math.abs(sale.amountInCents) : sale.amountInCents);
 
-function dailySeries(sales: readonly SaleMovement[], from: string, to: string) {
-  const days = new Map<string, { date: string; studio: number; aesthetics: number }>();
-  for (let day = from; day <= to; day = addDays(day, 1)) days.set(day, { date: day, studio: 0, aesthetics: 0 });
+const salesOf = (sales: readonly SaleMovement[], filter: PanelFilter) => sales.filter((sale) => matchesFilter(saleTags(sale), filter));
+
+/** Por dia: `total` conta a venda uma vez; cada linha dela recebe o valor inteiro. */
+function dailySeries(sales: readonly SaleMovement[], from: string, to: string): DailySales[] {
+  const days = new Map<string, DailySales>();
+  for (let day = from; day <= to; day = addDays(day, 1)) days.set(day, { date: day, total: 0, studio: 0, aesthetics: 0, other: 0 });
   for (const sale of sales) {
     const day = days.get(sale.occurredAt.slice(0, 10));
-    if (day) day[lineOf(sale)] += signed(sale);
+    if (!day) continue;
+    day.total += signed(sale);
+    for (const line of saleTags(sale).lines) day[line] += signed(sale);
   }
   return [...days.values()];
 }
 
-/** Totais do período filtrados por linha, a partir das movimentações. */
-function periodForLine(summary: SalesReportPeriod, sales: readonly SaleMovement[], line: LineFilter): SalesReportPeriod {
-  if (line === "all") return summary;
-  const own = sales.filter((sale) => matchesLine(sale, line));
+/** Totais do período filtrados por linha/serviço, a partir das movimentações (cada venda uma vez). */
+function periodForFilter(summary: SalesReportPeriod, sales: readonly SaleMovement[], filter: PanelFilter): SalesReportPeriod {
+  if (!isFilterActive(filter)) return summary;
+  const own = salesOf(sales, filter);
   const gross = own.filter((sale) => sale.kind === "sale").reduce((sum, sale) => sum + sale.amountInCents, 0);
   const cancelled = own.filter((sale) => sale.kind === "cancellation").reduce((sum, sale) => sum + Math.abs(sale.amountInCents), 0);
   const customerDiscount = own.filter((sale) => sale.kind === "sale").reduce((sum, sale) => sum + (sale.customerDiscountInCents ?? 0), 0);
@@ -200,24 +250,28 @@ function changePercent(current: number, previous: number): number | null {
   return Math.round(((current - previous) / Math.abs(previous)) * 1000) / 10;
 }
 
-export async function salesScreen(ctx: ScreenContext, from: string, to: string, line: LineFilter): Promise<SalesResponse> {
+/** O CRM informa os serviços de cada venda (PX5)? Sem vendas no período não dá para saber: sim. */
+const hasSaleServices = (sales: readonly SaleMovement[]) => sales.every((sale) => sale.services !== undefined);
+
+export async function salesScreen(ctx: ScreenContext, from: string, to: string, filter: PanelFilter): Promise<SalesResponse> {
   const length = daysBetween(from, to);
   const previousTo = addDays(from, -1);
   const previousFrom = addDays(previousTo, -length);
   const [current, previous] = await Promise.all([ctx.gateway.salesPeriod(from, to), ctx.gateway.salesPeriod(previousFrom, previousTo)]);
-  const sales = current.sales.filter((sale) => matchesLine(sale, line));
-  const summary = periodForLine(current.summary, current.sales, line);
-  const previousSummary = periodForLine(previous.summary, previous.sales, line);
+  const sales = salesOf(current.sales, filter);
+  const summary = periodForFilter(current.summary, current.sales, filter);
+  const previousSummary = periodForFilter(previous.summary, previous.sales, filter);
   const salesCount = sales.filter((sale) => sale.kind === "sale").length;
-  const byLine = Object.fromEntries(businessLines.map((item) => [item, 0])) as Record<BusinessLine, number>;
-  for (const sale of current.sales) byLine[lineOf(sale)] += signed(sale);
+  const byLine = Object.fromEntries(lineKeys.map((item) => [item, 0])) as Record<LineKey, number>;
+  for (const sale of current.sales) for (const line of saleTags(sale).lines) byLine[line] += signed(sale);
   return {
     from,
     to,
     summary: { ...summary, salesCount, averageTicketInCents: salesCount > 0 ? Math.round(summary.grossSalesInCents / salesCount) : 0 },
     previous: { ...previousSummary, from: previousFrom, to: previousTo },
     changePercent: changePercent(summary.netSalesInCents, previousSummary.netSalesInCents),
-    partialLine: line !== "all",
+    partialLine: isFilterActive(filter),
+    saleServices: hasSaleServices([...current.sales, ...previous.sales]),
     byLine,
     topItems: ranking(sales, (sale) => sale.itemName),
     byProfessional: ranking(sales, (sale) => sale.professionalName),
@@ -238,7 +292,9 @@ export function salesCsv(report: SalesResponse): string {
     sale.patientName,
     sale.itemName,
     { plan: "Plano", product: "Produto", service: "Serviço" }[sale.sourceType],
-    lineOf(sale) === "studio" ? "Studio" : "Estética",
+    saleTags(sale)
+      .lines.map((line) => lineKeyLabels[line])
+      .join(", "),
     sale.quantity,
     (signed(sale) / 100).toFixed(2).replace(".", ","),
   ]);
@@ -266,17 +322,34 @@ export async function leadsScreen(ctx: ScreenContext, staleDays: number): Promis
   };
 }
 
-export function goalFor(goals: Goals, line: LineFilter): number {
+/** Meta por linha; "Outros" e a escolha de serviços não têm meta. */
+export function goalFor(goals: Goals, line: LineFilter, services: readonly string[] = []): number {
+  if (services.length > 0 || line === "other") return 0;
   return line === "all" ? goals.studio + goals.aesthetics : goals[line];
 }
 
-export async function overviewScreen(ctx: ScreenContext, line: LineFilter, goals: Goals): Promise<OverviewResponse> {
+/** `GET /api/filters`: serviços ativos do CRM e os inativos que ainda têm turma, por linha. */
+export async function filtersScreen(ctx: ScreenContext): Promise<FiltersResponse> {
+  const [services, overview] = await Promise.all([ctx.gateway.services(), ctx.gateway.groups()]);
+  const options = new Map<string, FiltersResponse["services"][number]>();
+  for (const service of services)
+    if (service.active) options.set(service.id, { id: service.id, name: service.name, line: lineKeyOf(service.businessLine), active: true });
+  for (const group of overview.groups)
+    if (!options.has(group.serviceId))
+      options.set(group.serviceId, { id: group.serviceId, name: group.serviceName, line: lineKeyOf(group.businessLine), active: false });
+  return {
+    lines: !serviceIndex(services, overview.groups).legacy,
+    services: [...options.values()].sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name, "pt-BR")),
+  };
+}
+
+export async function overviewScreen(ctx: ScreenContext, filter: PanelFilter, goals: Goals): Promise<OverviewResponse> {
   const month = ctx.today.slice(0, 7);
   const previous = previousMonth(month);
   const dayOfMonth = Number(ctx.today.slice(8, 10));
   const previousSameDay = [monthEnd(previous), `${previous}-${String(dayOfMonth).padStart(2, "0")}`].sort()[0]!;
   const [groupsView, overview, waitlist, services, current, previousPeriod, stages, board, insights, patients] = await Promise.all([
-    groupsScreen(ctx, line),
+    groupsScreen(ctx, filter),
     ctx.gateway.groups(),
     ctx.gateway.waitlist(),
     ctx.gateway.services(),
@@ -287,13 +360,11 @@ export async function overviewScreen(ctx: ScreenContext, line: LineFilter, goals
     ctx.gateway.leadInsights(),
     ctx.gateway.patients(undefined, 100),
   ]);
-  const overdue = await loadOverdue(ctx, overview.groups, line);
-  const currentSummary = periodForLine(current.summary, current.sales, line);
-  const previousSummary = periodForLine(previousPeriod.summary, previousPeriod.sales, line);
-  const lines = serviceLines(services);
-  const activeWaitlist = waitlist.filter(
-    (entry: WaitlistEntry) => isActiveWaitlist(entry) && (line === "all" || (entry.serviceId ? (lines.get(entry.serviceId) ?? "studio") : "studio") === line),
-  );
+  const overdue = await loadOverdue(ctx, overview.groups, filter);
+  const currentSummary = periodForFilter(current.summary, current.sales, filter);
+  const previousSummary = periodForFilter(previousPeriod.summary, previousPeriod.sales, filter);
+  const index = serviceIndex(services, overview.groups);
+  const activeWaitlist = waitlist.filter((entry: WaitlistEntry) => isActiveWaitlist(entry) && matchesFilter(waitlistTags(entry, index), filter));
   const withSeat = activeWaitlist.filter((entry) => compatibleGroups(entry, overview.groups).length > 0).length;
   const leads = board.columns.flatMap((column) => column.leads);
   const renewals = patients.flatMap((patient) =>
@@ -334,7 +405,7 @@ export async function overviewScreen(ctx: ScreenContext, line: LineFilter, goals
   return {
     month,
     today: ctx.today,
-    features: groupsView.features,
+    features: { ...groupsView.features, saleServices: hasSaleServices([...current.sales, ...previousPeriod.sales]) },
     sales: {
       currentInCents: currentSummary.netSalesInCents,
       previousInCents: previousSummary.netSalesInCents,
@@ -344,7 +415,7 @@ export async function overviewScreen(ctx: ScreenContext, line: LineFilter, goals
         settlementInCents: currentSummary.settlementDiscountInCents ?? 0,
       },
     },
-    goal: goalProgress(goalFor(goals, line), currentSummary.netSalesInCents, ctx.today),
+    goal: goalProgress(goalFor(goals, filter.line, filter.services), currentSummary.netSalesInCents, ctx.today),
     idleRevenueInCents: groupsView.totals.idleRevenueInCents,
     freeSeats: groupsView.totals.freeSeats,
     occupancyPercent: groupsView.totals.occupancyPercent,
@@ -356,6 +427,6 @@ export async function overviewScreen(ctx: ScreenContext, line: LineFilter, goals
     waitlist: { waiting: activeWaitlist.length, withSeat },
     leads: insights ? { open: insights.open, conversionRate: insights.conversionRate, withoutContact: insights.withoutContact } : null,
     opportunities,
-    dailySales: dailySeries(current.sales.filter((sale) => matchesLine(sale, line)), monthStart(month), ctx.today),
+    dailySales: dailySeries(salesOf(current.sales, filter), monthStart(month), ctx.today),
   };
 }
