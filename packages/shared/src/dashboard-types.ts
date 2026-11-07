@@ -23,6 +23,8 @@ export interface Capabilities {
   sellPlan: boolean;
   createPatient: boolean;
   manageWaitlist: boolean;
+  /** Dados cadastrais e de contato dos clientes (`patients.view`): a ficha do cliente (PT8). */
+  seePatients: boolean;
   seeFinance: boolean;
   moveLeads: boolean;
   contactLeads: boolean;

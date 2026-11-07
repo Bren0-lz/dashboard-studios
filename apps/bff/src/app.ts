@@ -7,12 +7,16 @@ import {
   addDays,
   monthStart,
   parsePanelFilter,
+  patientPaymentsCrmQuery,
+  patientPaymentsQuerySchema,
   planValidUntil,
   todayInClinic,
   type BranchesResponse,
   type CancelEnrollmentResult,
   type EnrollResult,
   type GroupDetailsResponse,
+  type PatientDetailsResponse,
+  type PatientPaymentsResponse,
   type PlanType,
   type SessionInfo,
   lineOf,
@@ -85,6 +89,7 @@ const leadContactSchema = z.object({
   channel: z.enum(["phone", "whatsapp", "email", "in_person", "note"]).default("whatsapp"),
   notes: z.string().trim().min(2, "Descreva o contato.").max(2000),
 });
+const patientIdSchema = z.object({ id: z.uuid("Cliente inválido.") });
 const leadConvertSchema = z.object({ cpf: z.string().trim().min(11, "Informe o CPF.") });
 const periodQuery = z.object({ from: isoDate.optional(), to: isoDate.optional(), linha: z.string().optional(), servicos: z.string().optional() });
 
@@ -315,6 +320,35 @@ export async function buildApp(config: Config, deps: AppDeps = {}): Promise<Fast
   app.get("/api/patients", async (request) => {
     const { search } = z.object({ search: z.string().trim().max(120).optional() }).parse(request.query);
     return gatewayOf(request).patients(search, 20);
+  });
+
+  /**
+   * Rota que o CRM ainda não tem (antes da PX6): o Fastify do CRM responde 404 sem código próprio
+   * (`http_404`); cliente inexistente vem com `PATIENT_NOT_FOUND` e segue como 404.
+   */
+  const missingRoute = (error: unknown) => error instanceof CrmError && error.status === 404 && error.code === "http_404";
+
+  /** Ficha do cliente (PT8): o nome sempre; os dados cadastrais só com `patients.view` (o CRM decide). */
+  app.get("/api/patients/:id", async (request): Promise<PatientDetailsResponse> => {
+    const { id } = patientIdSchema.parse(request.params);
+    try {
+      return { available: true, ...(await gatewayOf(request).patientDetails(id)) };
+    } catch (error) {
+      if (missingRoute(error)) return { available: false };
+      throw error;
+    }
+  });
+
+  /** Histórico de pagamentos do cliente (PT8), com os filtros da API do CRM; sem `finance.view`, 403 do CRM. */
+  app.get("/api/patients/:id/payments", async (request): Promise<PatientPaymentsResponse> => {
+    const { id } = patientIdSchema.parse(request.params);
+    const query = patientPaymentsQuerySchema.parse(request.query);
+    try {
+      return { available: true, ...(await gatewayOf(request).patientPayments(id, patientPaymentsCrmQuery(query))) };
+    } catch (error) {
+      if (missingRoute(error)) return { available: false };
+      throw error;
+    }
   });
 
   app.post("/api/patients", async (request) => {
