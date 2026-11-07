@@ -28,8 +28,9 @@ export interface GroupWeeklySlot {
 }
 
 /**
- * Filial que o usuário pode escolher (`GET /branches` do CRM). Ainda não existe na API externa:
- * sem ela o seletor de filial some e o painel mostra a rede toda.
+ * Filial que o usuário pode escolher (`GET /external/v1/branches` do CRM: as filiais ativas da
+ * pessoa logada, a padrão primeiro). Num CRM sem a rota (404), o seletor some e o painel mostra a
+ * rede toda.
  */
 export interface CrmBranch {
   id: string;
