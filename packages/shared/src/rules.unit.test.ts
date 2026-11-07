@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { groupRowSchema, serviceSchema } from "./crm-schemas.js";
 import type { ExternalGroupRow, WaitlistEntry } from "./crm-types.js";
 import { initials, memberBubbles, seatsLabel, slotLabel } from "./format.js";
 import {
@@ -20,7 +21,7 @@ import { occupancyTone, dayPeriodOf } from "./occupancy.js";
 import { whatsappLink, chargeMessage } from "./whatsapp.js";
 import { formatMoney, shortDate } from "./format.js";
 import { workingDaysBetween } from "./dates.js";
-import { matchesFilter, parsePanelFilter, saleTags, type PanelFilter } from "./business-line.js";
+import { lineKeyOf, lineOf, matchesFilter, parsePanelFilter, saleTags, type PanelFilter } from "./business-line.js";
 
 function group(overrides: Partial<ExternalGroupRow>): ExternalGroupRow {
   return {
@@ -309,5 +310,42 @@ describe("filtro por linha e serviço (PT6)", () => {
     expect(saleTags({ sourceType: "service" })).toEqual({ lines: ["studio"], services: [] });
     expect(parsePanelFilter({ linha: "other", servicos: "a,b,a," })).toEqual({ line: "other", services: ["a", "b"] });
     expect(parsePanelFilter({ linha: "dance" })).toEqual({ line: "all", services: [] });
+  });
+});
+
+describe("linha sem classificação (CRM com PX3)", () => {
+  const group = {
+    id: "g1",
+    name: "Turma",
+    active: true,
+    serviceId: "s1",
+    serviceName: "Massoterapia",
+    professionalId: "p1",
+    professionalName: "Ana",
+    roomId: "r1",
+    roomName: "Sala 1",
+    schedule: "Seg 08:00",
+    weeklySlots: [],
+    capacity: 10,
+    enrolled: 2,
+    freeSeats: 8,
+    waitlistCount: 0,
+    occupancyPercent: 20,
+    sessionsPerMonth: 4,
+    monthlyRevenueInCents: 0,
+    potentialMonthlyRevenueInCents: 0,
+  };
+
+  it("aceita businessLine null em turmas e serviços (o mesmo campo vale para vendas e inadimplência)", () => {
+    expect(groupRowSchema.safeParse({ ...group, businessLine: null }).success).toBe(true);
+    expect(serviceSchema.safeParse({ id: "s1", name: "Massoterapia", active: true, businessLine: null }).success).toBe(true);
+    expect(groupRowSchema.safeParse({ ...group, businessLine: "dance" }).success).toBe(false);
+  });
+
+  it("trata a linha null como Outros e a ausente (CRM antigo) como Studio", () => {
+    expect(lineOf({ businessLine: null })).toBeNull();
+    expect(lineKeyOf(null)).toBe("other");
+    expect(lineOf({})).toBe("studio");
+    expect(lineKeyOf(undefined)).toBe("studio");
   });
 });
