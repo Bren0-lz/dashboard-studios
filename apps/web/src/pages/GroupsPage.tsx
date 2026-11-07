@@ -332,10 +332,22 @@ function GroupTableRow({
   );
 }
 
+function MemberCardContent({ member, showOverdue }: { member: ExternalGroupMember; showOverdue: boolean }) {
+  return (
+    <>
+      <strong>{member.patientName}</strong>
+      <small className="muted">
+        Desde {shortDate(member.startsOn)} · {member.monthlyInCents === null ? "Sem plano ativo" : `${formatMoney(member.monthlyInCents)}/mês`}
+      </small>
+      {showOverdue && member.overdue ? <MemberOverdueMark overdue={member.overdue} /> : null}
+    </>
+  );
+}
+
 /**
  * Matriculados da turma, carregados só quando a linha é aberta. Com `finance.view`, quem tem parcela
  * vencida aparece marcado como inadimplente. Com `onSelect` (quem tem `patients.view` ou `finance.view`),
- * cada nome é um botão que abre a ficha do cliente (PT8); sem ele, o nome é só texto.
+ * o card inteiro de cada aluno é um botão que abre a ficha do cliente (PT8); sem ele, é só texto.
  */
 function GroupMembers({ group, showOverdue, onSelect }: { group: Pick<GroupRow, "id" | "name">; showOverdue: boolean; onSelect?: ((member: ExternalGroupMember) => void) | undefined }) {
   const details = useRemote<GroupDetailsResponse>(`/groups/${group.id}`);
@@ -348,16 +360,15 @@ function GroupMembers({ group, showOverdue, onSelect }: { group: Pick<GroupRow, 
       {members.map((member) => (
         <li key={member.enrollmentId} className={showOverdue && member.overdue ? "is-overdue" : undefined}>
           {onSelect ? (
-            <button type="button" className="row-title" onClick={() => onSelect(member)} title="Ver ficha do cliente">
-              {member.patientName}
+            // O card inteiro abre a ficha (não só o nome); o nome acessível é o do aluno.
+            <button type="button" className="member-card" onClick={() => onSelect(member)} aria-label={member.patientName} title="Ver ficha do cliente">
+              <MemberCardContent member={member} showOverdue={showOverdue} />
             </button>
           ) : (
-            <strong>{member.patientName}</strong>
+            <div className="member-card">
+              <MemberCardContent member={member} showOverdue={showOverdue} />
+            </div>
           )}
-          <small className="muted">
-            Desde {shortDate(member.startsOn)} · {member.monthlyInCents === null ? "Sem plano ativo" : `${formatMoney(member.monthlyInCents)}/mês`}
-          </small>
-          {showOverdue && member.overdue ? <MemberOverdueMark overdue={member.overdue} /> : null}
         </li>
       ))}
     </ul>

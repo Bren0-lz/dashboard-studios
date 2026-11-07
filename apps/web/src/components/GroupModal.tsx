@@ -40,7 +40,7 @@ function MemberName({ member, children, onSelect }: { member: ExternalGroupMembe
       <strong>
         {children}
         {onSelect ? (
-          <button type="button" className="row-title" onClick={onSelect} title="Ver ficha do cliente">
+          <button type="button" className="row-title member-link" onClick={onSelect} title="Ver ficha do cliente">
             {member.patientName}
           </button>
         ) : (

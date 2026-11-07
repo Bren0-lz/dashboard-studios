@@ -84,6 +84,21 @@ describe("ficha do cliente (PT8)", () => {
     expect(screen.getByRole("combobox", { name: "Dia da semana" })).toHaveValue("2");
   });
 
+  it("o card inteiro do aluno abre a ficha: clicar na linha de data e valor, não só no nome", async () => {
+    await startServer();
+    const user = userEvent.setup();
+    renderAt("/turmas");
+    await login(user);
+    const members = await openMembers(user);
+    const card = within(members).getByRole("button", { name: NAME });
+    expect(card).toHaveClass("member-card");
+    expect(card).toHaveAttribute("title", "Ver ficha do cliente");
+    // A linha "Desde … · R$ …/mês" fica dentro do botão: clicar nela abre a ficha.
+    const detail = within(card).getByText(/^Desde /);
+    await user.click(detail);
+    expect(await screen.findByRole("dialog", { name: NAME })).toBeInTheDocument();
+  });
+
   it("filtra o histórico por situação, origem, serviço/linha e período, com os totais do filtro", async () => {
     const { calls } = await startServer();
     const user = userEvent.setup();
