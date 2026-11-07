@@ -308,6 +308,106 @@ a {
   font-size: var(--text-sm);
   font-weight: 500;
 }
+/* Lista de filiais estilizada pelo select personalizável do navegador (Chrome/Edge 135+). Nos
+   outros navegadores continua a lista nativa; o <select> e o teclado são os mesmos. */
+@supports (appearance: base-select) {
+  .branch-select select,
+  .branch-select select::picker(select) {
+    appearance: base-select;
+  }
+  .branch-select select {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 0 var(--space-3) 0 var(--space-4);
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .branch-select select:hover {
+    border-color: var(--green-2);
+  }
+  .branch-select select:open {
+    border-color: var(--green-2);
+    box-shadow: var(--focus);
+  }
+  /* Seta fina para baixo (no lugar do triângulo padrão); vira para cima com a lista aberta. */
+  .branch-select select::picker-icon {
+    content: "";
+    width: 6px;
+    height: 6px;
+    margin: 0 2px var(--space-1) var(--space-1);
+    border-right: 1.5px solid var(--muted);
+    border-bottom: 1.5px solid var(--muted);
+    rotate: 45deg;
+    transition: rotate 0.15s, margin 0.15s;
+  }
+  .branch-select select:open::picker-icon {
+    margin-bottom: calc(var(--space-1) * -1);
+    rotate: 225deg;
+  }
+  .branch-select select::picker(select) {
+    /* Abre abaixo do campo, alinhada pela direita (o seletor fica no canto direito da tela). */
+    position-area: block-end span-inline-start;
+    /* Sem espaço à esquerda (seletor à esquerda, no celular), abre para o outro lado. */
+    position-try-fallbacks: flip-inline;
+    min-width: anchor-size(width);
+    margin-top: var(--space-1);
+    padding: var(--space-1);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--paper);
+    box-shadow: var(--shadow);
+    opacity: 0;
+    translate: 0 -4px;
+    transition:
+      opacity 0.15s,
+      translate 0.15s,
+      display 0.15s allow-discrete,
+      overlay 0.15s allow-discrete;
+  }
+  .branch-select select:open::picker(select) {
+    opacity: 1;
+    translate: 0 0;
+  }
+  @starting-style {
+    .branch-select select:open::picker(select) {
+      opacity: 0;
+      translate: 0 -4px;
+    }
+  }
+  .branch-select option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 36px;
+    padding: 0 var(--space-3);
+    border-radius: var(--radius-sm);
+    color: var(--ink);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    cursor: pointer;
+  }
+  /* "Todas as filiais" separada das filiais. */
+  .branch-select option:first-child {
+    margin-bottom: var(--space-1);
+    border-bottom: 1px solid var(--line);
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  }
+  .branch-select option:hover,
+  .branch-select option:focus-visible {
+    outline: none;
+    background: var(--green-soft);
+  }
+  .branch-select option:checked {
+    color: var(--green);
+    font-weight: 600;
+  }
+  .branch-select option::checkmark {
+    order: 1;
+    margin-left: auto;
+    color: var(--green-2);
+  }
+}
 .content {
   display: flex;
   flex-direction: column;
@@ -932,9 +1032,10 @@ button:disabled {
 .groups-table thead th.num {
   white-space: normal;
 }
-/* Respiro entre cabeçalhos numéricos vizinhos ("Matriculados" e "Vagas disponíveis"). */
+/* Colunas numéricas centralizadas (título, valores e total); Turma e Horários ficam à esquerda. */
+.groups-table .num,
 .groups-table thead th.num {
-  padding-left: var(--space-4);
+  text-align: center;
 }
 /* Telas largas: colunas mais largas e títulos em uma linha só. Abaixo disso a tabela continua
    cabendo sem rolar de lado, com os títulos quebrando em duas linhas. */
@@ -991,7 +1092,7 @@ button:disabled {
 .members-toggle {
   display: inline-flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
   gap: var(--space-1);
   padding: var(--space-1) var(--space-2);
   border: 1px solid transparent;
@@ -2907,6 +3008,9 @@ button.member-card:hover strong {
     display: block;
     padding: var(--space-2) 0 0;
     background: none;
+  }
+  .groups-table .num {
+    text-align: right;
   }
   .groups-table .members-row td::before,
   .groups-table tfoot td[data-label="Horários"] {
